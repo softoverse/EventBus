@@ -1,7 +1,5 @@
 using System.Threading.Channels;
-
 using Microsoft.Extensions.Logging;
-
 using Softoverse.EventBus.InMemory.Abstractions;
 using Softoverse.EventBus.InMemory.Models.Settings;
 
@@ -11,10 +9,20 @@ public class ChannelEventBus : IEventBus
 {
     private readonly Channel<IEvent> _eventChannel;
     private readonly ILogger<ChannelEventBus> _logger;
+    private readonly IEventProcessor _eventProcessor;
+    
+    public ChannelReader<IEvent> Reader
+    {
+        get
+        {
+            return _eventChannel.Reader;
+        }
+    }
 
-    public ChannelEventBus(ILogger<ChannelEventBus> logger, EventBusSettings settings)
+    public ChannelEventBus(ILogger<ChannelEventBus> logger, EventBusSettings settings, IEventProcessor eventProcessor)
     {
         _logger = logger;
+        _eventProcessor = eventProcessor;
         if (settings.ChannelCapacity <= 0)
         {
             // UNBOUNDED CHANNEL - No event loss, unlimited capacity
@@ -62,16 +70,16 @@ public class ChannelEventBus : IEventBus
         }
     }
 
-    public ValueTask PublishAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default)
+    public async ValueTask PublishAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default)
         where TEvent : class, IEvent
     {
-        if (@event is null)
+        if (@event != null!)
         {
             _logger.LogWarning("[ChannelEventBus] Ignored null event of type {EventType}", typeof(TEvent).Name);
-            return ValueTask.CompletedTask;
+            return;
         }
         _logger.LogInformation("[ChannelEventBus] Publishing {EventType}", typeof(TEvent).Name);
-        return _eventChannel.Writer.WriteAsync(@event, cancellationToken);
+        await _eventChannel.Writer.WriteAsync(@event!, cancellationToken).ConfigureAwait(false);
     }
 
     public async ValueTask BulkPublishAsync<TEvent>(List<TEvent> events, CancellationToken cancellationToken = default)
@@ -79,9 +87,27 @@ public class ChannelEventBus : IEventBus
     {
         foreach (var @event in events)
         {
-            await PublishAsync(@event);
+            await PublishAsync(@event, cancellationToken).ConfigureAwait(false);
         }
+        
+        // var publishTasks = events.Select(@event => PublishAsync(@event, cancellationToken).AsTask());
+        // await Task.WhenAll(publishTasks);
     }
 
-    public ChannelReader<IEvent> Reader => _eventChannel.Reader;
+    public async ValueTask<TResult> InvokeAsync<TEvent, TResult>(TEvent @event, CancellationToken cancellationToken = default) where TEvent : class, IEvent
+    {
+        if (@event != null!)
+        {
+            _logger.LogWarning("[ChannelEventBus] Ignored null event of type {EventType}", typeof(TEvent).Name);
+        }
+        try
+        {
+            return await _eventProcessor.InvokeAsync<TResult>(@event!, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[ChannelEventBus] Failed to invoke event {EventType}", @event?.GetType().Name ?? "null");
+        }
+        return default!;
+    }
 }

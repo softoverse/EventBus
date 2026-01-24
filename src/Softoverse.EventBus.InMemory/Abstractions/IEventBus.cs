@@ -8,4 +8,8 @@ public interface IEventBus
 
     ValueTask BulkPublishAsync<TEvent>(List<TEvent> events, CancellationToken cancellationToken = default)
         where TEvent : class, IEvent;
+    
+    // Wait for the response
+    ValueTask<TResult> InvokeAsync<TEvent, TResult>(TEvent @event, CancellationToken cancellationToken = default)
+        where TEvent : class, IEvent;
 }

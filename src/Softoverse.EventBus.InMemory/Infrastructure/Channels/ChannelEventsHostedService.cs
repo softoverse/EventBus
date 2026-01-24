@@ -27,8 +27,8 @@ public class ChannelEventsHostedService(
 
                 try
                 {
-                    await semaphore.WaitAsync(cancellationToken);
-                    await eventProcessor.ProcessEventAsync(@event, cancellationToken);
+                    await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    await eventProcessor.ProcessEventAsync(@event, cancellationToken).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {

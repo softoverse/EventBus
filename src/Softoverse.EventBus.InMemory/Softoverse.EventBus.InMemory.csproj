@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net9.0</TargetFramework>
+        <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
 
@@ -9,15 +9,14 @@
 
         <!-- NuGet package metadata -->
         <PackageId>Softoverse.EventBus.InMemory</PackageId>
-        <Version>1.0.0</Version>
         <Title>EventBus</Title>
         <Description>EventBus</Description>
         <PackageTags>eventbus;pub-sub;mahmudabir;</PackageTags>
+        <PackAsTool>False</PackAsTool>
         <Authors>mahmudabir</Authors>
         <RepositoryUrl>https://github.com/mahmudabir/EventBus</RepositoryUrl>
         <PackageProjectUrl>https://github.com/mahmudabir/EventBus</PackageProjectUrl>
         <RepositoryType>git</RepositoryType>
-        <PackageReadmeFile></PackageReadmeFile>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <IncludeSymbols>true</IncludeSymbols>
@@ -28,11 +27,20 @@
         <Deterministic>true</Deterministic>
         <AllowedOutputExtensionsInPackageBuildOutputFolder>$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>
         <PackageOutputPath>../../packages/</PackageOutputPath>
+
+        <Version>10.0.0</Version>
+        
+        <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
     </PropertyGroup>
 
     <PropertyGroup>
         <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
     </PropertyGroup>
+
+    <ItemGroup>
+        <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    </ItemGroup>
 
     <PropertyGroup>
         <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
@@ -71,9 +79,9 @@ internal static class BuildConstants
     </Target>
 
     <ItemGroup>
-        <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.8" />
-        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.8" />
-        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.8" />
+        <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.2" />
+        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.2" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.2" />
     </ItemGroup>
 
 </Project>

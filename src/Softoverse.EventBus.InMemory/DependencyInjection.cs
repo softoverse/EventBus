@@ -10,12 +10,12 @@ using Softoverse.EventBus.InMemory.Models.Settings;
 
 namespace Softoverse.EventBus.InMemory;
 
-public static class DepedencyInjection
+public static class DependencyInjection
 {
     public static IServiceCollection AddEventBus<TEventProcessor>(this IServiceCollection services, IConfiguration configuration, params List<Assembly> assemblies)
         where TEventProcessor : class, IEventProcessor
     {
-        string eventBusType = configuration[BuildConstants.EventBusTypeConfigPath]?.ToString() ?? BuildConstants.Channel;
+        string eventBusType = configuration[BuildConstants.EventBusTypeConfigPath] ?? BuildConstants.Channel;
 
         services.AddEventBusSettings(configuration);
         services.AddSingleton<IEventProcessor, TEventProcessor>();

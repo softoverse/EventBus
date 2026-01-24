@@ -1,8 +1,9 @@
 <Solution>
-  <Folder Name="/Solution Items/">
+  <Folder Name="/.SolutionItems/">
     <File Path=".editorconfig" />
     <File Path=".gitattributes" />
     <File Path=".gitignore" />
+    <File Path="CONTRIBUTING.md" />
     <File Path="README.md" />
   </Folder>
   <Folder Name="/src/">
