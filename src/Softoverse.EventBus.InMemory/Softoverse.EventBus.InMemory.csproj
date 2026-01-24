@@ -14,8 +14,8 @@
         <PackageTags>eventbus;pub-sub;mahmudabir;</PackageTags>
         <PackAsTool>False</PackAsTool>
         <Authors>mahmudabir</Authors>
-        <RepositoryUrl>https://github.com/mahmudabir/EventBus</RepositoryUrl>
-        <PackageProjectUrl>https://github.com/mahmudabir/EventBus</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/softoverse/EventBus</RepositoryUrl>
+        <PackageProjectUrl>https://github.com/softoverse/EventBus</PackageProjectUrl>
         <RepositoryType>git</RepositoryType>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
