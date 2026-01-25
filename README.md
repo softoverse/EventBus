@@ -25,19 +25,19 @@ A lightweight, high-performance in-memory event bus implementation for .NET 10+ 
 - [Contributing](#-contributing)
 - [License](#-license)
 
-## ? Features
+## ✨ Features
 
-- **?? High Performance**: Built on .NET 9's `System.Threading.Channels` for optimal throughput
-- **? Asynchronous Processing**: Non-blocking event publishing and handling
-- **?? Type-Safe**: Strongly-typed event contracts with compile-time safety
-- **?? Flexible Configuration**: Choose between Channel-based or General event processing
-- **?? Concurrency Control**: Built-in semaphore-based concurrency management
-- **??? Resilient**: Configurable retry policies and error handling
-- **?? Bulk Operations**: Support for bulk event publishing
-- **?? Extensive Logging**: Comprehensive logging for monitoring and debugging
-- **??? Dependency Injection**: First-class DI container support
+- **⚡ High Performance**: Built on .NET 9's `System.Threading.Channels` for optimal throughput
+- **🔄 Asynchronous Processing**: Non-blocking event publishing and handling
+- **🛡️ Type-Safe**: Strongly-typed event contracts with compile-time safety
+- **🔧 Flexible Configuration**: Choose between Channel-based or General event processing
+- **🧵 Concurrency Control**: Built-in semaphore-based concurrency management
+- **🧱 Resilient**: Configurable retry policies and error handling
+- **📦 Bulk Operations**: Support for bulk event publishing
+- **📝 Extensive Logging**: Comprehensive logging for monitoring and debugging
+- **🧩 Dependency Injection**: First-class DI container support
 
-## ?? Installation
+## 📦 Installation
 
 Install the package via NuGet Package Manager:
 
@@ -51,7 +51,7 @@ Or via Package Manager Console:
 Install-Package Softoverse.EventBus.InMemory
 ```
 
-## ?? Quick Start
+## 🚀 Quick Start
 
 ### 1. Define Your Events
 
@@ -181,7 +181,7 @@ public class DefaultEventProcessor : IEventProcessor
 }
 ```
 
-## ?? Configuration
+## ⚙️ Configuration
 
 ### Dependency Injection Setup
 
@@ -200,6 +200,8 @@ builder.Services.AddEventBus<DefaultEventProcessor>(
 
 var app = builder.Build();
 ```
+
+`AddEventBus` registers `IEventBus` and `IEventProcessor` as scoped services. If you need to use them inside singletons or hosted services, resolve them through a scope (for example, via `IServiceScopeFactory`).
 
 ### Configuration Options
 
@@ -233,7 +235,7 @@ Configure the event bus behavior in your `appsettings.json`:
 | `RetryCount` | Maximum retry attempts | 10 |
 | `EachRetryInterval` | Seconds between retry attempts | 3 |
 
-## ?? Usage
+## 📖 Usage
 
 ### Publishing Events
 
@@ -306,7 +308,7 @@ public class AuditLogHandler : IEventHandler<OrderCreatedEvent>
 }
 ```
 
-## ?? Processing Strategies
+## 🧠 Processing Strategies
 
 ### Channel-based Processing (Recommended)
 
@@ -440,10 +442,11 @@ Publisher → IEventBus.PublishAsync() → IEventProcessor.ProcessEventAsync() �
 
 The `AddEventBus<TEventProcessor>()` extension method automatically:
 
-1. Scans provided assemblies for `IEventHandler` implementations
-2. Registers handlers as **Scoped** services
-3. Registers both generic (`IEventHandler<TEvent>`) and non-generic (`IEventHandler`) interfaces
-4. Allows multiple handlers per event type
+1. Registers `IEventBus` and `IEventProcessor` as **Scoped** services
+2. Scans provided assemblies for `IEventHandler` implementations
+3. Registers handlers as **Scoped** services
+4. Registers both generic (`IEventHandler<TEvent>`) and non-generic (`IEventHandler`) interfaces
+5. Allows multiple handlers per event type
 
 ```csharp
 // Handlers are resolved from DI container per scope
@@ -722,7 +725,7 @@ public class EventBusSettings
 - `EachRetryInterval`: Seconds between retries (default: 3)
 - `RetryIntervals`: Array of retry intervals based on `RetryCount` and `EachRetryInterval`
 
-## ??? Advanced Usage
+## 🧩 Advanced Usage
 
 ### Custom Event Processor
 
@@ -816,7 +819,7 @@ public class ComplexOrderHandler : IEventHandler<OrderCreatedEvent>
 }
 ```
 
-## ?? Monitoring and Diagnostics
+## 📈 Monitoring and Diagnostics
 
 The event bus provides comprehensive logging for monitoring:
 
@@ -831,7 +834,7 @@ The event bus provides comprehensive logging for monitoring:
 }
 ```
 
-## ?? Testing
+## 🧪 Testing
 
 ### Unit Testing Event Handlers
 
@@ -1451,25 +1454,23 @@ builder.Services.AddScoped<IMyService, MyService>();
 
 **b) Singleton Depending on Scoped**
 ```csharp
-// ❌ Problem: Singleton can't depend on scoped
-builder.Services.AddSingleton<IEventBus, ChannelEventBus>();
-builder.Services.AddScoped<IOrderRepository, OrderRepository>();
-
-public class EventProcessor
+// Problem: Singleton can't depend on scoped
+public class EventPublisherHostedService : BackgroundService
 {
-    // This will fail - trying to inject scoped service into singleton path
-    public EventProcessor(IOrderRepository repo) { }
+    // IEventBus is scoped, so this is invalid
+    public EventPublisherHostedService(IEventBus eventBus) { }
 }
 
-// ✅ Solution: Use IServiceProvider and create scopes
-public class EventProcessor
+// Solution: Use IServiceScopeFactory and create scopes
+public class EventPublisherHostedService : BackgroundService
 {
-    private readonly IServiceProvider _serviceProvider;
-    
-    public async Task ProcessEventAsync(IEvent @event)
+    private readonly IServiceScopeFactory _scopeFactory;
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using var scope = _serviceProvider.CreateScope();
-        var repo = scope.ServiceProvider.GetRequiredService<IOrderRepository>();
+        using var scope = _scopeFactory.CreateScope();
+        var eventBus = scope.ServiceProvider.GetRequiredService<IEventBus>();
+        await eventBus.PublishAsync(new MyEvent(), stoppingToken);
     }
 }
 ```

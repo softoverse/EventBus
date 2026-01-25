@@ -18,17 +18,18 @@ public static class DependencyInjection
         string eventBusType = configuration[BuildConstants.EventBusTypeConfigPath] ?? BuildConstants.Channel;
 
         services.AddEventBusSettings(configuration);
-        services.AddSingleton<IEventProcessor, TEventProcessor>();
+        services.AddScoped<IEventProcessor, TEventProcessor>();
 
         if (string.Equals(eventBusType, BuildConstants.Channel, StringComparison.OrdinalIgnoreCase))
         {
             services.AddHostedService<ChannelEventsHostedService>();
-            services.AddSingleton<ChannelEventBus>();
-            services.AddSingleton<IEventBus>(sp => sp.GetRequiredService<ChannelEventBus>());
+            services.AddSingleton<EventChannelProvider>();
+            services.AddScoped<ChannelEventBus>();
+            services.AddScoped<IEventBus>(sp => sp.GetRequiredService<ChannelEventBus>());
         }
         else
         {
-            services.AddSingleton<IEventBus, GeneralEventBus>();
+            services.AddScoped<IEventBus, GeneralEventBus>();
         }
 
         // Register all IEventHandler<T> implementations from application assemblies

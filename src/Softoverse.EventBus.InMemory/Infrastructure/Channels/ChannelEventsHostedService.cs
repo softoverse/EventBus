@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -7,9 +8,9 @@ using Softoverse.EventBus.InMemory.Models.Settings;
 namespace Softoverse.EventBus.InMemory.Infrastructure.Channels;
 
 public class ChannelEventsHostedService(
-    ChannelEventBus eventBus,
-    IEventProcessor eventProcessor,
+    IServiceScopeFactory scopeFactory,
     EventBusSettings eventBusSettings,
+    EventChannelProvider channelProvider,
     ILogger<ChannelEventsHostedService> logger
     ) : BackgroundService
 {
@@ -18,7 +19,9 @@ public class ChannelEventsHostedService(
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         logger.LogInformation("ChannelEventsHostedService started.");
-        var reader = eventBus.Reader;
+        using var scope = scopeFactory.CreateScope();
+        var eventProcessor = scope.ServiceProvider.GetRequiredService<IEventProcessor>();
+        var reader = channelProvider.Channel.Reader;
         while (!cancellationToken.IsCancellationRequested)
         {
             try
