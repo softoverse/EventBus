@@ -39,7 +39,7 @@ public class ChannelEventsHostedService(
                     semaphore.Release();
                 }
 
-                logger.LogInformation("[ChannelEventsHostedService] Received event of type {EventType} with Id {EventId}", @event?.GetType().Name, @event?.Id);
+                logger.LogInformation("[ChannelEventsHostedService] Received event of type {EventType}", @event?.GetType().Name);
             }
             catch (OperationCanceledException)
             {

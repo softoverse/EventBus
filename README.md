@@ -55,28 +55,34 @@ Install-Package Softoverse.EventBus.InMemory
 
 ### 1. Define Your Events
 
-Create events by implementing the `IEvent` interface or inheriting from `EventBase`:
+Create events by implementing the `IEvent` interface:
 
 ```csharp
 using Softoverse.EventBus.InMemory.Abstractions;
 
-// Using EventBase (recommended)
-public class OrderCreatedEvent : EventBase
+public class OrderCreatedEvent : IEvent
 {
     public string OrderNumber { get; set; }
     public decimal Amount { get; set; }
     public string CustomerId { get; set; }
-    
-    public OrderCreatedEvent() : base() { }
-    public OrderCreatedEvent(Guid id) : base(id) { }
 }
 
-// Or implement IEvent directly
 public class PaymentProcessedEvent : IEvent
 {
-    public Guid Id { get; set; } = Guid.CreateVersion7();
     public string PaymentId { get; set; }
     public decimal Amount { get; set; }
+}
+```
+
+**Note:** You can optionally add an `Id` property to your events if needed:
+
+```csharp
+public class OrderCreatedEvent : IEvent
+{
+    public Guid Id { get; init; } = Guid.CreateVersion7();
+    public string OrderNumber { get; set; }
+    public decimal Amount { get; set; }
+    public string CustomerId { get; set; }
 }
 ```
 
@@ -135,8 +141,8 @@ public class DefaultEventProcessor : IEventProcessor
 
     public async Task ProcessEventAsync(IEvent @event, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Processing event {EventType} with ID {EventId}", 
-            @event.GetType().Name, @event.Id);
+        _logger.LogInformation("Processing event {EventType}", 
+            @event.GetType().Name);
             
         await ProcessEventHandlersAsync(@event, cancellationToken);
     }
@@ -494,43 +500,34 @@ All implementations are thread-safe:
 
 #### IEvent
 
-The base interface for all events in the system.
+The base marker interface for all events in the system.
 
 ```csharp
-public interface IEvent
-{
-    Guid Id { get; set; }
-}
+public interface IEvent;
 ```
 
-**Properties:**
-- `Id`: Unique identifier for the event (auto-generated using `Guid.CreateVersion7()`)
+**Note:** `IEvent` is a marker interface with no properties. Events can define their own properties as needed.
 
-#### EventBase (Abstract Class)
+#### Creating Events
 
-Convenient base class for implementing events.
+Events are created by implementing the `IEvent` interface:
 
 ```csharp
-public abstract class EventBase : IEvent
-{
-    public Guid Id { get; set; }
-    
-    protected EventBase(Guid? id = null)
-    {
-        Id = id ?? Guid.CreateVersion7();
-    }
-}
-```
-
-**Usage:**
-```csharp
-public class UserRegisteredEvent : EventBase
+public class UserRegisteredEvent : IEvent
 {
     public string UserId { get; set; }
     public string Email { get; set; }
-    
-    public UserRegisteredEvent() : base() { }
-    public UserRegisteredEvent(Guid id) : base(id) { }
+}
+```
+
+**Note:** Since `IEvent` is a marker interface, you have full control over the properties and structure of your events. You can add an `Id` property if your use case requires it:
+
+```csharp
+public class UserRegisteredEvent : IEvent
+{
+    public Guid Id { get; init; } = Guid.CreateVersion7();
+    public string UserId { get; set; }
+    public string Email { get; set; }
 }
 ```
 
@@ -896,14 +893,14 @@ Use past-tense verbs to indicate something has happened:
 
 ```csharp
 ✅ Good:
-public class OrderCreatedEvent : EventBase { }
-public class PaymentProcessedEvent : EventBase { }
-public class UserRegisteredEvent : EventBase { }
+public class OrderCreatedEvent : IEvent { }
+public class PaymentProcessedEvent : IEvent { }
+public class UserRegisteredEvent : IEvent { }
 
 ❌ Avoid:
-public class CreateOrderEvent : EventBase { }
-public class ProcessPaymentEvent : EventBase { }
-public class RegisterUserEvent : EventBase { }
+public class CreateOrderEvent : IEvent { }
+public class ProcessPaymentEvent : IEvent { }
+public class RegisterUserEvent : IEvent { }
 ```
 
 #### 2. Event Immutability
@@ -911,12 +908,12 @@ public class RegisterUserEvent : EventBase { }
 Make events immutable after creation:
 
 ```csharp
-public class OrderCreatedEvent : EventBase
+public class OrderCreatedEvent : IEvent
 {
     public string OrderNumber { get; init; }  // Use 'init' instead of 'set'
     public decimal Amount { get; init; }
     public DateTime CreatedAt { get; init; }
-    
+
     public OrderCreatedEvent(string orderNumber, decimal amount)
     {
         OrderNumber = orderNumber;
@@ -932,12 +929,12 @@ Each event should represent a single business occurrence:
 
 ```csharp
 ✅ Good - Separate concerns:
-public class OrderCreatedEvent : EventBase { }
-public class PaymentInitiatedEvent : EventBase { }
-public class InventoryReservedEvent : EventBase { }
+public class OrderCreatedEvent : IEvent { }
+public class PaymentInitiatedEvent : IEvent { }
+public class InventoryReservedEvent : IEvent { }
 
 ❌ Avoid - Too broad:
-public class OrderProcessedEvent : EventBase 
+public class OrderProcessedEvent : IEvent 
 {
     public Payment Payment { get; set; }
     public Inventory Inventory { get; set; }
@@ -950,7 +947,7 @@ public class OrderProcessedEvent : EventBase
 Events should contain all information handlers need:
 
 ```csharp
-public class OrderCreatedEvent : EventBase
+public class OrderCreatedEvent : IEvent
 {
     public string OrderNumber { get; init; }
     public string CustomerId { get; init; }
@@ -1529,11 +1526,11 @@ public class DiagnosticEventProcessor : IEventProcessor
 {
     private readonly IEventProcessor _innerProcessor;
     private readonly ILogger _logger;
-    
+
     public async Task ProcessEventAsync(IEvent @event, CancellationToken ct)
     {
-        _logger.LogInformation("📨 Event received: {Type} (ID: {Id})", 
-            @event.GetType().Name, @event.Id);
+        _logger.LogInformation("📨 Event received: {Type}", 
+            @event.GetType().Name);
             
         var sw = Stopwatch.StartNew();
         try
@@ -1962,16 +1959,16 @@ public class EventStore
 {
     private readonly IEventBus _eventBus;
     private readonly List<IEvent> _events = new();
-    
+
     public async Task AppendAsync(IEvent @event)
     {
         _events.Add(@event);
         await _eventBus.PublishAsync(@event);
     }
-    
-    public IEnumerable<IEvent> GetEvents(Guid aggregateId)
+
+    public IEnumerable<IEvent> GetEvents()
     {
-        return _events.Where(e => e.Id == aggregateId);
+        return _events;
     }
 }
 ```
