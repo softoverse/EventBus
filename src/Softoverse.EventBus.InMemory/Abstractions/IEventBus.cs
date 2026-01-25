@@ -10,6 +10,5 @@ public interface IEventBus
         where TEvent : class, IEvent;
     
     // Wait for the response
-    ValueTask<TResult> InvokeAsync<TEvent, TResult>(TEvent @event, CancellationToken cancellationToken = default)
-        where TEvent : class, IEvent;
+    ValueTask<TResult> InvokeAsync<TResult>(object @event, CancellationToken cancellationToken = default);
 }

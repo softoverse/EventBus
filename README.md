@@ -464,7 +464,7 @@ var applicableHandlers = handlers.Where(h => h.CanHandle(@event));
 For scenarios requiring a response from event handlers:
 
 ```csharp
-TResult result = await eventBus.InvokeAsync<TEvent, TResult>(event);
+TResult result = await eventBus.InvokeAsync<TResult>(event);
 ```
 
 This method:
@@ -544,13 +544,12 @@ public interface IEventBus
     // Fire-and-forget publish: enqueue background job to process subscribers
     ValueTask PublishAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default)
         where TEvent : class, IEvent;
-        
+
     ValueTask BulkPublishAsync<TEvent>(List<TEvent> events, CancellationToken cancellationToken = default)
         where TEvent : class, IEvent;
-        
+
     // Wait for the response
-    ValueTask<TResult> InvokeAsync<TEvent, TResult>(TEvent @event, CancellationToken cancellationToken = default)
-        where TEvent : class, IEvent;
+    ValueTask<TResult> InvokeAsync<TResult>(object @event, CancellationToken cancellationToken = default);
 }
 ```
 
@@ -572,12 +571,12 @@ public interface IEventBus
     - `cancellationToken`: Optional cancellation token
   - **Returns:** `ValueTask` (completes when all events are enqueued or processed)
 
-- **InvokeAsync<TEvent, TResult>(event, cancellationToken)**
+- **InvokeAsync<TResult>(event, cancellationToken)**
   - Synchronously invokes event handlers and waits for a result
   - Bypasses the channel queue (even in Channel mode)
   - Returns result from the event processor
   - **Parameters:**
-    - `event`: The event to invoke
+    - `event`: The event to invoke (of type `object`)
     - `cancellationToken`: Optional cancellation token
   - **Returns:** `ValueTask<TResult>` with the result from handlers
   - **Use Cases:** Query operations, request-response patterns, synchronous workflows
@@ -634,7 +633,7 @@ public interface IEventProcessor
 {
     Task ProcessEventAsync(IEvent @event, CancellationToken cancellationToken = default);
     Task ProcessEventHandlersAsync(IEvent @event, CancellationToken cancellationToken = default);
-    Task<TResult> InvokeAsync<TResult>(IEvent @event, CancellationToken cancellationToken = default);
+    Task<TResult> InvokeAsync<TResult>(object @event, CancellationToken cancellationToken = default);
 }
 ```
 

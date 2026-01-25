@@ -6,5 +6,5 @@ public interface IEventProcessor
 
     Task ProcessEventHandlersAsync(IEvent @event, CancellationToken cancellationToken = default);
     
-    Task<TResult> InvokeAsync<TResult>(IEvent @event, CancellationToken cancellationToken = default);
+    Task<TResult> InvokeAsync<TResult>(object @event, CancellationToken cancellationToken = default);
 }

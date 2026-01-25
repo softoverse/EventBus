@@ -38,11 +38,11 @@ public class GeneralEventBus(
         // await Task.WhenAll(publishTasks);
     }
 
-    public async ValueTask<TResult> InvokeAsync<TEvent, TResult>(TEvent @event, CancellationToken cancellationToken = default) where TEvent : class, IEvent
+    public async ValueTask<TResult> InvokeAsync<TResult>(object @event, CancellationToken cancellationToken = default)
     {
         if (@event != null!)
         {
-            logger.LogWarning("[GeneralEventBus] Ignored null event of type {EventType}", typeof(TEvent).Name);
+            logger.LogWarning("[GeneralEventBus] Ignored null event of type {EventType}", @event.GetType().Name);
         }
         try
         {

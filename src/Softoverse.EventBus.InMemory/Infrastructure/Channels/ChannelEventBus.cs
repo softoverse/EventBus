@@ -94,11 +94,11 @@ public class ChannelEventBus : IEventBus
         // await Task.WhenAll(publishTasks);
     }
 
-    public async ValueTask<TResult> InvokeAsync<TEvent, TResult>(TEvent @event, CancellationToken cancellationToken = default) where TEvent : class, IEvent
+    public async ValueTask<TResult> InvokeAsync<TResult>(object @event, CancellationToken cancellationToken = default)
     {
         if (@event != null!)
         {
-            _logger.LogWarning("[ChannelEventBus] Ignored null event of type {EventType}", typeof(TEvent).Name);
+            _logger.LogWarning("[ChannelEventBus] Ignored null event of type {EventType}", @event.GetType().Name);
         }
         try
         {
