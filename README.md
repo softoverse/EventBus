@@ -405,12 +405,16 @@ The EventBus architecture consists of four main components:
 └─────────────┘      │  General)    │      └────────────────────┘      └──────────────┘
                      └──────────────┘
                            │
-                           ▼
-                     ┌──────────────────────┐
-                     │ ChannelEventsHosted  │
-                     │      Service         │
-                     │ (Background Worker)  │
-                     └──────────────────────┘
+                     ┌─────┴──────┐
+                     ▼            ▼
+        ┌───────────────────────────────────┐
+        │ ChannelEventsPublishingHostedSvc  │ (Immediate Events)
+        │      (Background Worker)          │
+        └───────────────────────────────────┘
+        ┌───────────────────────────────────┐
+        │ ChannelEventsSchedulingHostedSvc  │ (Scheduled Events)
+        │      (Background Worker)          │
+        └───────────────────────────────────┘
 ```
 
 ### Channel-Based Implementation Details
@@ -434,20 +438,29 @@ The `ChannelEventBus` uses two separate channels configured based on `ChannelCap
 #### 2. **Background Processing**
 ```csharp
 // Immediate Processing
-ChannelEventsHostedService → PublishingChannel.Reader.ReadAsync() → IEventProcessor.ProcessEventAsync()
+ChannelEventsPublishingHostedService → PublishingChannel.Reader.ReadAsync() → IEventProcessor.ProcessEventAsync()
 
 // Scheduled Processing
-ChannelEventsHostedService → SchedulingChannel.Reader.ReadAsync() → IEventProcessor.ProcessScheduledEventAsync()
+ChannelEventsSchedulingHostedService → SchedulingChannel.Reader.ReadAsync() → IEventProcessor.ProcessScheduledEventAsync()
 ```
 
-The `ChannelEventsHostedService` is a `BackgroundService` that:
-- Runs two parallel processing tasks: one for immediate events, one for scheduled events
-- **Publishing Channel Processor**: Continuously reads from `PublishingChannel` and processes events immediately
-- **Scheduling Channel Processor**: Continuously reads from `SchedulingChannel` and processes scheduled events
-- Uses a shared `SemaphoreSlim` to control concurrent processing across both channels (limit = `EventProcessorCapacity`)
-- Processes events through the `IEventProcessor` implementation (`ProcessEventAsync` or `ProcessScheduledEventAsync`)
+The EventBus uses two separate `BackgroundService` implementations:
+
+**`ChannelEventsPublishingHostedService`**:
+- Dedicated background service for immediate event processing
+- Continuously reads from `PublishingChannel` and processes events immediately
+- Uses `SemaphoreSlim` to control concurrent processing (limit = `EventProcessorCapacity`)
+- Processes events through `IEventProcessor.ProcessEventAsync()`
 - Handles errors gracefully without crashing the service
-- Both processors run concurrently using `Task.WhenAll()` for maximum throughput
+
+**`ChannelEventsSchedulingHostedService`**:
+- Dedicated background service for scheduled event processing
+- Continuously reads from `SchedulingChannel` and processes scheduled events
+- Uses its own `SemaphoreSlim` for independent concurrency control (limit = `EventProcessorCapacity`)
+- Processes events through `IEventProcessor.ProcessScheduledEventAsync()`
+- Handles errors gracefully without crashing the service
+
+Both services run independently and concurrently for maximum throughput and separation of concerns.
 
 #### 3. **Channel Configuration Options**
 
@@ -1514,7 +1527,7 @@ public class MyHandler : IEventHandler<MyEvent>
 ```csharp
 // ✅ Ensure app is running to start background services
 var app = builder.Build();
-await app.RunAsync(); // This starts ChannelEventsHostedService
+await app.RunAsync(); // This starts both background services
 ```
 
 #### 2. Null Event Warning
@@ -2569,8 +2582,8 @@ For the full license text, see [LICENSE](LICENSE) or visit https://www.apache.or
 - 📊 Scheduled report generation
 
 **Architecture Updates:**
-- Dual background processing tasks in `ChannelEventsHostedService`
-- Shared semaphore for concurrency control across both channels
+- Separate dedicated background services: `ChannelEventsPublishingHostedService` and `ChannelEventsSchedulingHostedService`
+- Independent semaphores for concurrency control in each service
 - Enhanced `EventChannelProvider` with scheduling channel support
 
 **Documentation:**
@@ -2660,7 +2673,8 @@ await _eventBus.ScheduleAsync(
 - `IEventProcessor` - Event processing coordination
 - `ChannelEventBus` - Channel-based implementation
 - `GeneralEventBus` - Direct processing implementation
-- `ChannelEventsHostedService` - Background processing service
+- `ChannelEventsPublishingHostedService` - Background service for immediate events
+- `ChannelEventsSchedulingHostedService` - Background service for scheduled events
 - `EventBusSettings` - Configuration model
 
 **Configuration Options:**

@@ -1,0 +1,12 @@
+{
+  "EventBusSettings": {
+    "EventBusType": "Channel",
+    "MaxConcurrency": 10,
+    "ChannelCapacity": -1,
+    "EventProcessorCapacity": 1,
+    "ExecuteAfterSeconds": 3,
+    "RetryAfterSeconds": 5,
+    "RetryCount": 10,
+    "EachRetryInterval": 3
+  }
+}

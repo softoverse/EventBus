@@ -28,7 +28,7 @@
         <AllowedOutputExtensionsInPackageBuildOutputFolder>$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>
         <PackageOutputPath>../../packages/</PackageOutputPath>
 
-        <Version>10.5.0</Version>
+        <Version>10.6.0</Version>
         
         <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
     </PropertyGroup>
@@ -84,6 +84,10 @@ internal static class BuildConstants
         <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.2" />
         <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.2" />
         <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.2" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Infrastructure\" />
     </ItemGroup>
 
 </Project>

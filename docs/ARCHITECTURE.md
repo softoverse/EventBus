@@ -1,4 +1,4 @@
-﻿# Architecture Documentation
+﻿﻿# Architecture Documentation
 
 ## Overview
 
@@ -98,23 +98,25 @@ PublishAsync() ────► Channel.Writer.WriteAsync()
    │                      ▼
    │              [Bounded/Unbounded Channel]
    │                      │
-   │                      ▼
-   │              ChannelEventsHostedService
-   │                      │
-   │                      ▼
-   │              Channel.Reader.ReadAsync()
-   │                      │
-   │                      ▼
-   │              Semaphore.WaitAsync() [Concurrency Control]
-   │                      │
-   │                      ▼
-   │              IEventProcessor.ProcessEventAsync()
-   │                      │
-   │                      ▼
-   │              [Handler Resolution & Execution]
-   │                      │
-   │                      ▼
-   │              Semaphore.Release()
+   │              ┌───────┴────────┐
+   │              ▼                ▼
+   │   ChannelEventsPublishingHostedService  ChannelEventsSchedulingHostedService
+   │              │                          │
+   │              ▼                          ▼
+   │   Channel.Reader.ReadAsync()  Channel.Reader.ReadAsync()
+   │              │                          │
+   │              ▼                          ▼
+   │   Semaphore.WaitAsync()       Semaphore.WaitAsync()
+   │              │                          │
+   │              ▼                          ▼
+   │   IEventProcessor.           IEventProcessor.
+   │   ProcessEventAsync()        ProcessScheduledEventAsync()
+   │              │                          │
+   │              ▼                          ▼
+   │   [Handler Resolution & Execution]   [Handler Resolution & Execution]
+   │              │                          │
+   │              ▼                          ▼
+   │   Semaphore.Release()        Semaphore.Release()
    │
    └─► Returns immediately (non-blocking)
 ```
@@ -226,33 +228,40 @@ private async Task SafeHandleAsync(IEventHandler handler, IEvent @event, Cancell
 }
 ```
 
-### 5. ChannelEventsHostedService
+### 5. Background Services for Channel Processing
 
-**Purpose**: Background service for processing events from channel.
+The EventBus uses two dedicated background services for processing events from channels, providing separation of concerns and independent lifecycle management.
+
+#### ChannelEventsPublishingHostedService
+
+**Purpose**: Background service for processing immediate events from the publishing channel.
 
 **Design Decisions**:
 - Implements `BackgroundService` for automatic lifecycle management
-- Uses `SemaphoreSlim` to control concurrency
+- Uses `SemaphoreSlim` to control concurrency for immediate events
 - Graceful shutdown on cancellation
 - Error isolation (one event failure doesn't crash service)
+- Independent from scheduled event processing
 
 **Processing Loop**:
 ```csharp
 protected override async Task ExecuteAsync(CancellationToken ct)
 {
+    var reader = _channelProvider.PublishingChannel.Reader;
+    
     while (!ct.IsCancellationRequested)
     {
         try
         {
-            // Read from channel (blocks if empty)
-            var @event = await _channel.Reader.ReadAsync(ct);
+            // Read from publishing channel (blocks if empty)
+            var @event = await reader.ReadAsync(ct);
             
             // Wait for available slot (concurrency control)
             await _semaphore.WaitAsync(ct);
             
             try
             {
-                // Process event
+                // Process event immediately
                 await _eventProcessor.ProcessEventAsync(@event, ct);
             }
             finally
@@ -274,6 +283,67 @@ protected override async Task ExecuteAsync(CancellationToken ct)
 }
 ```
 
+#### ChannelEventsSchedulingHostedService
+
+**Purpose**: Background service for processing scheduled events from the scheduling channel.
+
+**Design Decisions**:
+- Implements `BackgroundService` for automatic lifecycle management
+- Uses its own `SemaphoreSlim` to control concurrency for scheduled events
+- Graceful shutdown on cancellation
+- Error isolation (one event failure doesn't crash service)
+- Independent from immediate event processing
+
+**Processing Loop**:
+```csharp
+protected override async Task ExecuteAsync(CancellationToken ct)
+{
+    var reader = _channelProvider.SchedulingChannel.Reader;
+    
+    while (!ct.IsCancellationRequested)
+    {
+        try
+        {
+            // Read from scheduling channel (blocks if empty)
+            var scheduledEvent = await reader.ReadAsync(ct);
+            
+            // Wait for available slot (concurrency control)
+            await _semaphore.WaitAsync(ct);
+            
+            try
+            {
+                // Process scheduled event (respects scheduled time)
+                await _eventProcessor.ProcessScheduledEventAsync(
+                    scheduledEvent.Event, 
+                    scheduledEvent.ScheduledTime, 
+                    ct);
+            }
+            finally
+            {
+                // Release slot
+                _semaphore.Release();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            break; // Graceful shutdown
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error processing scheduled event");
+            // Continue processing next event
+        }
+    }
+}
+```
+
+**Benefits of Separation**:
+- **Separation of Concerns**: Each service has a single, clear responsibility
+- **Independent Scaling**: Different `EventProcessorCapacity` could be configured per service in future versions
+- **Better Observability**: Separate logging and monitoring for immediate vs scheduled events
+- **Fault Isolation**: Failure in one service doesn't affect the other
+- **Clearer Code**: Simpler, more maintainable implementation
+
 ## Concurrency Model
 
 ### Channel Mode
@@ -282,15 +352,23 @@ protected override async Task ExecuteAsync(CancellationToken ct)
 
 1. **Channel Writers**: Multiple concurrent publishers (controlled by `SingleWriter = false`)
 2. **Channel Readers**: Multiple concurrent readers (controlled by `SingleReader = false`)
-3. **Event Processors**: Limited by `SemaphoreSlim` (configured via `EventProcessorCapacity`)
+3. **Event Processors**: Each background service has its own `SemaphoreSlim` for independent concurrency control (configured via `EventProcessorCapacity`)
 4. **Handler Execution**: All applicable handlers run in parallel via `Task.WhenAll()`
 
 **Configuration Impact**:
 ```csharp
-EventProcessorCapacity = 10    // Up to 10 events processing simultaneously
-Handlers per event = 3         // Each event triggers 3 handlers
-Total concurrent handlers = 30 // 10 events × 3 handlers
+EventProcessorCapacity = 10              // Up to 10 events processing simultaneously per service
+Handlers per event = 3                   // Each event triggers 3 handlers
+Total concurrent handlers per service = 30  // 10 events × 3 handlers
+
+// With two services:
+Total concurrent handlers (both) = 60    // Publishing (30) + Scheduling (30)
 ```
+
+**Benefits of Separate Services**:
+- **Independent Concurrency**: Each service (Publishing/Scheduling) can process up to `EventProcessorCapacity` events concurrently
+- **Better Resource Distribution**: Immediate and scheduled events don't compete for the same processing slots
+- **Fault Isolation**: A failure in one service doesn't affect the other's processing capacity
 
 ### General Mode
 
@@ -345,7 +423,8 @@ foreach (var assembly in assemblies)
 | IEventProcessor | Singleton | Stateless coordinator |
 | IEventHandler | Scoped | Per-event processing isolation |
 | EventBusSettings | Singleton | Configuration |
-| ChannelEventsHostedService | Singleton | Background service |
+| ChannelEventsPublishingHostedService | Singleton | Background service |
+| ChannelEventsSchedulingHostedService | Singleton | Background service |
 
 ## Performance Characteristics
 

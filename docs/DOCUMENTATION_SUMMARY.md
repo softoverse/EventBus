@@ -1,4 +1,4 @@
-﻿# Documentation Summary
+﻿﻿# Documentation Summary
 
 This document provides an overview of the comprehensive documentation created for the Softoverse.EventBus.InMemory package.
 
@@ -75,7 +75,7 @@ This document provides an overview of the comprehensive documentation created fo
   - IEventBus (both implementations)
   - IEventHandler
   - IEventProcessor
-  - ChannelEventsHostedService
+  - ChannelEventsPublishingHostedService & ChannelEventsSchedulingHostedService
 - Concurrency model explanation
 - Dependency injection strategy
 - Performance characteristics

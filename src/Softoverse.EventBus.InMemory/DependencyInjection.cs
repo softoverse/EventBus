@@ -4,8 +4,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 using Softoverse.EventBus.InMemory.Abstractions;
-using Softoverse.EventBus.InMemory.Channels;
-using Softoverse.EventBus.InMemory.General;
+using Softoverse.EventBus.InMemory.Infrastructure.Channels;
+using Softoverse.EventBus.InMemory.Infrastructure.General;
 using Softoverse.EventBus.InMemory.Models.Settings;
 
 namespace Softoverse.EventBus.InMemory;
@@ -22,7 +22,8 @@ public static class DependencyInjection
 
         if (string.Equals(eventBusType, BuildConstants.Channel, StringComparison.OrdinalIgnoreCase))
         {
-            services.AddHostedService<ChannelEventsHostedService>();
+            services.AddHostedService<ChannelEventsPublishingHostedService>();
+            services.AddHostedService<ChannelEventsSchedulingHostedService>();
             services.AddSingleton<EventChannelProvider>();
             services.AddScoped<ChannelEventBus>();
             services.AddScoped<IEventBus>(sp => sp.GetRequiredService<ChannelEventBus>());
