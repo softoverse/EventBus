@@ -2,11 +2,12 @@ using System.Threading.Channels;
 using Softoverse.EventBus.InMemory.Abstractions;
 using Softoverse.EventBus.InMemory.Models.Settings;
 
-namespace Softoverse.EventBus.InMemory.Infrastructure.Channels;
+namespace Softoverse.EventBus.InMemory.Channels;
 
 public sealed class EventChannelProvider
 {
-    public Channel<IEvent> Channel { get; }
+    public Channel<IEvent> PublishingChannel { get; }
+    public Channel<(IEvent Event, DateTimeOffset ScheduledTime)> SchedulingChannel { get; }
 
     public EventChannelProvider(EventBusSettings settings)
     {
@@ -19,7 +20,8 @@ public sealed class EventChannelProvider
                 SingleWriter = false,
                 AllowSynchronousContinuations = true
             };
-            Channel = System.Threading.Channels.Channel.CreateUnbounded<IEvent>(options);
+            PublishingChannel = Channel.CreateUnbounded<IEvent>(options);
+            SchedulingChannel = Channel.CreateUnbounded<(IEvent Event, DateTimeOffset ScheduledTime)>(options);
         }
         else
         {
@@ -31,7 +33,8 @@ public sealed class EventChannelProvider
                 SingleWriter = false,
                 AllowSynchronousContinuations = true
             };
-            Channel = System.Threading.Channels.Channel.CreateBounded<IEvent>(options);
+            PublishingChannel = Channel.CreateBounded<IEvent>(options);
+            SchedulingChannel = Channel.CreateBounded<(IEvent Event, DateTimeOffset ScheduledTime)>(options);
         }
     }
 }

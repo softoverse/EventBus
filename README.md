@@ -245,17 +245,17 @@ Inject `IEventBus` into your services and publish events:
 public class OrderService
 {
     private readonly IEventBus _eventBus;
-    
+
     public OrderService(IEventBus eventBus)
     {
         _eventBus = eventBus;
     }
-    
+
     public async Task CreateOrderAsync(CreateOrderRequest request)
     {
         // Create order logic...
         var order = new Order(request);
-        
+
         // Publish single event
         var orderCreatedEvent = new OrderCreatedEvent
         {
@@ -263,17 +263,67 @@ public class OrderService
             Amount = order.Amount,
             CustomerId = order.CustomerId
         };
-        
+
         await _eventBus.PublishAsync(orderCreatedEvent);
-        
+
         // Publish multiple events
         var events = new List<OrderCreatedEvent>
         {
             orderCreatedEvent,
             // ... more events
         };
-        
+
         await _eventBus.BulkPublishAsync(events);
+    }
+}
+```
+
+### Scheduling Events
+
+Schedule events to be processed at a specific time in the future:
+
+```csharp
+public class SubscriptionService
+{
+    private readonly IEventBus _eventBus;
+
+    public SubscriptionService(IEventBus eventBus)
+    {
+        _eventBus = eventBus;
+    }
+
+    public async Task CreateSubscriptionAsync(Subscription subscription)
+    {
+        // Create subscription logic...
+
+        // Schedule a reminder event to be processed 7 days before expiry
+        var reminderDate = subscription.ExpiryDate.AddDays(-7);
+        var reminderEvent = new SubscriptionExpiryReminderEvent
+        {
+            SubscriptionId = subscription.Id,
+            CustomerId = subscription.CustomerId,
+            ExpiryDate = subscription.ExpiryDate
+        };
+
+        await _eventBus.ScheduleAsync(reminderEvent, reminderDate);
+
+        // Schedule multiple reminder events at different times
+        var reminders = new List<SubscriptionExpiryReminderEvent>
+        {
+            new() { SubscriptionId = subscription.Id, DaysRemaining = 7 },
+            new() { SubscriptionId = subscription.Id, DaysRemaining = 3 },
+            new() { SubscriptionId = subscription.Id, DaysRemaining = 1 }
+        };
+
+        var oneWeekBefore = subscription.ExpiryDate.AddDays(-7);
+        await _eventBus.BulkScheduleAsync(reminders, oneWeekBefore);
+
+        // Schedule an event using relative time
+        var processingDeadline = DateTimeOffset.UtcNow.AddHours(24);
+        await _eventBus.ScheduleAsync(
+            new PaymentProcessingDeadlineEvent { OrderId = order.Id },
+            processingDeadline
+        );
     }
 }
 ```
@@ -367,24 +417,37 @@ The EventBus architecture consists of four main components:
 
 #### 1. **Event Publishing Flow**
 ```csharp
-Publisher → IEventBus.PublishAsync() → Channel.Writer.WriteAsync() → Returns immediately
+// Immediate Publishing
+Publisher → IEventBus.PublishAsync() → PublishingChannel.Writer.WriteAsync() → Returns immediately
+
+// Scheduled Publishing
+Publisher → IEventBus.ScheduleAsync() → SchedulingChannel.Writer.WriteAsync() → Returns immediately
 ```
 
-The `ChannelEventBus` uses an unbounded or bounded channel configured based on `ChannelCapacity`:
+The `ChannelEventBus` uses two separate channels configured based on `ChannelCapacity`:
 
+- **PublishingChannel**: For immediate event processing
+- **SchedulingChannel**: For scheduled event processing (holds event + scheduled time tuple)
 - **Unbounded Channel** (`ChannelCapacity = -1`): No capacity limit, events never lost
 - **Bounded Channel** (`ChannelCapacity > 0`): Fixed capacity with `BoundedChannelFullMode.Wait` to prevent event loss
 
 #### 2. **Background Processing**
 ```csharp
-ChannelEventsHostedService → Channel.Reader.ReadAsync() → IEventProcessor.ProcessEventAsync()
+// Immediate Processing
+ChannelEventsHostedService → PublishingChannel.Reader.ReadAsync() → IEventProcessor.ProcessEventAsync()
+
+// Scheduled Processing
+ChannelEventsHostedService → SchedulingChannel.Reader.ReadAsync() → IEventProcessor.ProcessScheduledEventAsync()
 ```
 
 The `ChannelEventsHostedService` is a `BackgroundService` that:
-- Continuously reads events from the channel
-- Uses a `SemaphoreSlim` to control concurrent processing (limit = `EventProcessorCapacity`)
-- Processes events through the `IEventProcessor` implementation
+- Runs two parallel processing tasks: one for immediate events, one for scheduled events
+- **Publishing Channel Processor**: Continuously reads from `PublishingChannel` and processes events immediately
+- **Scheduling Channel Processor**: Continuously reads from `SchedulingChannel` and processes scheduled events
+- Uses a shared `SemaphoreSlim` to control concurrent processing across both channels (limit = `EventProcessorCapacity`)
+- Processes events through the `IEventProcessor` implementation (`ProcessEventAsync` or `ProcessScheduledEventAsync`)
 - Handles errors gracefully without crashing the service
+- Both processors run concurrently using `Task.WhenAll()` for maximum throughput
 
 #### 3. **Channel Configuration Options**
 
@@ -457,9 +520,11 @@ var applicableHandlers = handlers.Where(h => h.CanHandle(@event));
 
 ### Event Processing Pipeline
 
+#### Immediate Event Processing
+
 1. **Event Published**: `IEventBus.PublishAsync(event)`
-2. **Enqueued** (Channel mode): Event written to channel
-3. **Background Worker** (Channel mode): Reads from channel
+2. **Enqueued** (Channel mode): Event written to `PublishingChannel`
+3. **Background Worker** (Channel mode): Reads from `PublishingChannel`
 4. **Semaphore Acquired**: Waits if at capacity limit
 5. **Processor Invoked**: `IEventProcessor.ProcessEventAsync(event)`
 6. **Handlers Resolved**: DI container provides all applicable handlers
@@ -467,6 +532,24 @@ var applicableHandlers = handlers.Where(h => h.CanHandle(@event));
 8. **Error Handling**: Exceptions caught per handler, don't affect others
 9. **Semaphore Released**: Next event can be processed
 10. **Logged**: Comprehensive logging at each step
+
+#### Scheduled Event Processing
+
+1. **Event Scheduled**: `IEventBus.ScheduleAsync(event, scheduleTime)`
+2. **Time Conversion**: `scheduleTime` automatically converted to UTC
+3. **Enqueued** (Channel mode): Event + scheduled time tuple written to `SchedulingChannel`
+4. **Background Worker** (Channel mode): Reads from `SchedulingChannel`
+5. **Semaphore Acquired**: Waits if at capacity limit
+6. **Processor Invoked**: `IEventProcessor.ProcessScheduledEventAsync(event, scheduledTime)`
+7. **Delay Calculation**: Calculates wait time until scheduled time
+8. **Wait Period**: Delays execution until scheduled time arrives
+9. **Handlers Resolved**: DI container provides all applicable handlers
+10. **Parallel Execution**: All handlers run concurrently via `Task.WhenAll()`
+11. **Error Handling**: Exceptions caught per handler, don't affect others
+12. **Semaphore Released**: Next event can be processed
+13. **Logged**: Comprehensive logging at each step
+
+**Note:** In General mode, scheduled events are processed immediately without respecting the scheduled time.
 
 ### Request-Response Pattern (InvokeAsync)
 
@@ -556,20 +639,48 @@ public interface IEventBus
 **Methods:**
 
 - **PublishAsync<TEvent>(event, cancellationToken)**
-  - Publishes a single event to all registered handlers
+  - Publishes a single event to all registered handlers for immediate processing
   - Returns immediately (Channel mode) or after processing (General mode)
   - **Parameters:**
     - `event`: The event to publish
     - `cancellationToken`: Optional cancellation token
   - **Returns:** `ValueTask` (completes when event is enqueued or processed)
+  - **Use Cases:** Immediate event processing, real-time notifications, synchronous workflows
 
 - **BulkPublishAsync<TEvent>(events, cancellationToken)**
-  - Publishes multiple events of the same type
+  - Publishes multiple events of the same type for immediate processing
   - Processes sequentially to maintain order
   - **Parameters:**
-    - `events`: List of events to publish
+    - `events`: IEnumerable of events to publish
     - `cancellationToken`: Optional cancellation token
   - **Returns:** `ValueTask` (completes when all events are enqueued or processed)
+  - **Use Cases:** Batch processing, bulk operations, importing data
+
+- **ScheduleAsync<TEvent>(event, scheduleTime, cancellationToken)**
+  - Schedules a single event to be processed at a specific time in the future
+  - Time is automatically converted to UTC for consistent timezone handling
+  - Event is held in a scheduling channel until the scheduled time
+  - **Parameters:**
+    - `event`: The event to schedule
+    - `scheduleTime`: The time when the event should be processed (DateTimeOffset, auto-converted to UTC)
+    - `cancellationToken`: Optional cancellation token
+  - **Returns:** `ValueTask` (completes when event is enqueued for scheduling)
+  - **Use Cases:** Delayed notifications, scheduled reminders, time-based workflows, subscription renewals, deadline tracking
+  - **Note (Channel mode):** Uses a dedicated scheduling channel that's processed by the background service
+  - **Note (General mode):** Events are processed immediately (scheduling is not enforced)
+
+- **BulkScheduleAsync<TEvent>(events, scheduleTime, cancellationToken)**
+  - Schedules multiple events of the same type to be processed at a specific time
+  - All events are scheduled for the same time
+  - Time is automatically converted to UTC for consistent timezone handling
+  - **Parameters:**
+    - `events`: IEnumerable of events to schedule
+    - `scheduleTime`: The time when all events should be processed (DateTimeOffset, auto-converted to UTC)
+    - `cancellationToken`: Optional cancellation token
+  - **Returns:** `ValueTask` (completes when all events are enqueued for scheduling)
+  - **Use Cases:** Batch scheduled notifications, recurring reminders, scheduled bulk operations
+  - **Note (Channel mode):** Uses a dedicated scheduling channel that's processed by the background service
+  - **Note (General mode):** Events are processed immediately (scheduling is not enforced)
 
 - **InvokeAsync<TResult>(event, cancellationToken)**
   - Synchronously invokes event handlers and waits for a result
@@ -632,6 +743,7 @@ Interface for processing events and coordinating handler execution.
 public interface IEventProcessor
 {
     Task ProcessEventAsync(IEvent @event, CancellationToken cancellationToken = default);
+    Task ProcessScheduledEventAsync(IEvent @event, DateTimeOffset scheduledTime, CancellationToken cancellationToken = default);
     Task ProcessEventHandlersAsync(IEvent @event, CancellationToken cancellationToken = default);
     Task<TResult> InvokeAsync<TResult>(object @event, CancellationToken cancellationToken = default);
 }
@@ -640,9 +752,18 @@ public interface IEventProcessor
 **Methods:**
 
 - **ProcessEventAsync(event, cancellationToken)**
-  - Main entry point for event processing
+  - Main entry point for immediate event processing
   - Coordinates the overall processing workflow
   - Typically calls `ProcessEventHandlersAsync` internally
+
+- **ProcessScheduledEventAsync(event, scheduledTime, cancellationToken)**
+  - Processes a scheduled event at the specified time
+  - Waits until the scheduled time before processing the event
+  - **Parameters:**
+    - `event`: The event to process
+    - `scheduledTime`: The UTC time when the event should be processed (DateTimeKind.Utc)
+    - `cancellationToken`: Optional cancellation token
+  - **Implementation Note:** Should check if `scheduledTime` is in the future and delay processing accordingly
 
 - **ProcessEventHandlersAsync(event, cancellationToken)**
   - Resolves and executes all applicable handlers for the event
@@ -785,7 +906,7 @@ public class ComplexOrderHandler : IEventHandler<OrderCreatedEvent>
     private readonly IEmailService _emailService;
     private readonly IPaymentService _paymentService;
     private readonly ILogger<ComplexOrderHandler> _logger;
-    
+
     public ComplexOrderHandler(
         IOrderRepository orderRepository,
         IEmailService emailService,
@@ -804,10 +925,10 @@ public class ComplexOrderHandler : IEventHandler<OrderCreatedEvent>
         {
             // Complex business logic with multiple dependencies
             var order = await _orderRepository.GetByNumberAsync(@event.OrderNumber);
-            
+
             await _paymentService.InitializePaymentAsync(order.PaymentInfo);
             await _emailService.SendOrderConfirmationAsync(order.CustomerId, order);
-            
+
             _logger.LogInformation("Successfully processed order {OrderNumber}", @event.OrderNumber);
         }
         catch (Exception ex)
@@ -815,6 +936,118 @@ public class ComplexOrderHandler : IEventHandler<OrderCreatedEvent>
             _logger.LogError(ex, "Failed to process order {OrderNumber}", @event.OrderNumber);
             throw; // Re-throw to trigger retry logic
         }
+    }
+}
+```
+
+### Custom Scheduled Event Processor
+
+Create a custom event processor that properly handles scheduled events:
+
+```csharp
+public class ScheduledEventProcessor : IEventProcessor
+{
+    private readonly IServiceProvider _serviceProvider;
+    private readonly ILogger<ScheduledEventProcessor> _logger;
+
+    public ScheduledEventProcessor(
+        IServiceProvider serviceProvider,
+        ILogger<ScheduledEventProcessor> logger)
+    {
+        _serviceProvider = serviceProvider;
+        _logger = logger;
+    }
+
+    public async Task ProcessEventAsync(IEvent @event, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Processing immediate event {EventType}", @event.GetType().Name);
+        await ProcessEventHandlersAsync(@event, cancellationToken);
+    }
+
+    public async Task ProcessScheduledEventAsync(
+        IEvent @event, 
+        DateTimeOffset scheduledTime, 
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation(
+            "Processing scheduled event {EventType} scheduled for {ScheduledTime}", 
+            @event.GetType().Name, 
+            scheduledTime);
+
+        // Convert to UTC if not already
+        var scheduledTimeUtc = scheduledTime.ToUniversalTime();
+        var now = DateTimeOffset.UtcNow;
+
+        // Calculate delay
+        var delay = scheduledTimeUtc - now;
+
+        if (delay > TimeSpan.Zero)
+        {
+            _logger.LogInformation(
+                "Event {EventType} will be delayed by {Delay} until {ScheduledTime}",
+                @event.GetType().Name,
+                delay,
+                scheduledTimeUtc);
+
+            // Wait until scheduled time
+            await Task.Delay(delay, cancellationToken);
+        }
+        else
+        {
+            _logger.LogWarning(
+                "Scheduled time {ScheduledTime} is in the past. Processing immediately.",
+                scheduledTimeUtc);
+        }
+
+        // Process the event
+        await ProcessEventHandlersAsync(@event, cancellationToken);
+    }
+
+    public async Task ProcessEventHandlersAsync(
+        IEvent @event, 
+        CancellationToken cancellationToken = default)
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var handlers = scope.ServiceProvider.GetServices<IEventHandler>();
+
+        var applicableHandlers = handlers.Where(h => h.CanHandle(@event)).ToList();
+
+        if (!applicableHandlers.Any())
+        {
+            _logger.LogWarning("No handlers found for event type {EventType}", @event.GetType().Name);
+            return;
+        }
+
+        var handlerTasks = applicableHandlers.Select(handler => 
+            SafeHandleAsync(handler, @event, cancellationToken));
+
+        await Task.WhenAll(handlerTasks);
+    }
+
+    private async Task SafeHandleAsync(
+        IEventHandler handler, 
+        IEvent @event, 
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await handler.HandleAsync(@event, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, 
+                "Handler {HandlerType} failed to process event {EventType}", 
+                handler.GetType().Name, 
+                @event.GetType().Name);
+        }
+    }
+
+    public Task<TResult> InvokeAsync<TResult>(
+        object @event, 
+        CancellationToken cancellationToken = default)
+    {
+        // Implementation for request-response pattern
+        throw new NotImplementedException();
     }
 }
 ```
@@ -1583,7 +1816,7 @@ A: Yes! Just inject `IEventBus` into your handler and publish:
 public class OrderHandler : IEventHandler<OrderCreatedEvent>
 {
     private readonly IEventBus _eventBus;
-    
+
     public async Task HandleAsync(OrderCreatedEvent @event, CancellationToken ct)
     {
         // Process order...
@@ -1592,11 +1825,40 @@ public class OrderHandler : IEventHandler<OrderCreatedEvent>
 }
 ```
 
+**Q: How does event scheduling work in Channel mode vs General mode?**  
+A: 
+- **Channel Mode**: Events are written to a dedicated `SchedulingChannel` with the scheduled time. A background service continuously reads from this channel and processes events via `ProcessScheduledEventAsync`, which delays execution until the scheduled time.
+- **General Mode**: Scheduled events are processed immediately without respecting the scheduled time. If you need true scheduling, use Channel mode.
+
+**Q: What happens to scheduled events if the application restarts?**  
+A: Scheduled events in the channel are lost on restart. For persistent scheduling, consider:
+- Using a persistent message broker (RabbitMQ, Azure Service Bus)
+- Implementing a durable job scheduler (Hangfire, Quartz.NET)
+- Storing scheduled events in a database with a polling mechanism
+
+**Q: Can I schedule events with different times in bulk?**  
+A: `BulkScheduleAsync` schedules all events for the same time. For different times, call `ScheduleAsync` multiple times:
+```csharp
+await _eventBus.ScheduleAsync(event1, time1);
+await _eventBus.ScheduleAsync(event2, time2);
+await _eventBus.ScheduleAsync(event3, time3);
+```
+
+**Q: How accurate is the scheduled event timing?**  
+A: Timing accuracy depends on:
+- System load and available resources
+- `EventProcessorCapacity` setting (higher = more concurrent processing)
+- Handler execution time
+- Channel capacity and processing queue depth
+
+Typical accuracy is within seconds for normal workloads. For millisecond precision, consider specialized timing libraries.
+
 **Q: What happens if the application crashes?**  
-A: Events in the channel are lost. For durability, consider:
+A: Events in both channels (publishing and scheduling) are lost. For durability, consider:
 - Persisting events before publishing
 - Using durable message brokers
 - Implementing outbox pattern
+- Using persistent job schedulers for scheduled events
 
 ## 📊 Performance Characteristics
 
@@ -1942,13 +2204,189 @@ public class DataImportHandler : IEventHandler<DataImportRequestedEvent>
     public async Task HandleAsync(DataImportRequestedEvent @event, CancellationToken ct)
     {
         await _importService.ImportFromUrlAsync(@event.FileUrl, @event.BatchSize);
-        
+
         // Publish completion event
         await _eventBus.PublishAsync(new DataImportCompletedEvent
         {
             FileUrl = @event.FileUrl,
             RecordsProcessed = result.Count
         });
+    }
+}
+```
+
+### Scheduled Reminders and Notifications
+
+```csharp
+public class SubscriptionService
+{
+    private readonly IEventBus _eventBus;
+
+    public async Task CreateSubscriptionAsync(Subscription subscription)
+    {
+        // Save subscription...
+
+        // Schedule reminder emails before expiration
+        var sevenDaysBeforeExpiry = subscription.ExpiryDate.AddDays(-7);
+        await _eventBus.ScheduleAsync(
+            new SubscriptionExpiryReminderEvent
+            {
+                SubscriptionId = subscription.Id,
+                CustomerId = subscription.CustomerId,
+                DaysRemaining = 7
+            },
+            sevenDaysBeforeExpiry
+        );
+
+        var oneDayBeforeExpiry = subscription.ExpiryDate.AddDays(-1);
+        await _eventBus.ScheduleAsync(
+            new SubscriptionExpiryReminderEvent
+            {
+                SubscriptionId = subscription.Id,
+                CustomerId = subscription.CustomerId,
+                DaysRemaining = 1
+            },
+            oneDayBeforeExpiry
+        );
+    }
+}
+
+public class SubscriptionReminderHandler : IEventHandler<SubscriptionExpiryReminderEvent>
+{
+    private readonly IEmailService _emailService;
+    private readonly ISubscriptionRepository _repository;
+
+    public async Task HandleAsync(
+        SubscriptionExpiryReminderEvent @event, 
+        CancellationToken ct)
+    {
+        var subscription = await _repository.GetByIdAsync(@event.SubscriptionId);
+
+        if (subscription.IsActive)
+        {
+            await _emailService.SendReminderAsync(
+                @event.CustomerId,
+                $"Your subscription expires in {@event.DaysRemaining} days"
+            );
+        }
+    }
+}
+```
+
+### Trial Period and Grace Period Management
+
+```csharp
+public class TrialService
+{
+    private readonly IEventBus _eventBus;
+
+    public async Task StartTrialAsync(User user)
+    {
+        var trial = new Trial
+        {
+            UserId = user.Id,
+            StartDate = DateTimeOffset.UtcNow,
+            EndDate = DateTimeOffset.UtcNow.AddDays(14)
+        };
+
+        // Schedule trial ending events
+        await _eventBus.ScheduleAsync(
+            new TrialEndingEvent { UserId = user.Id, TrialId = trial.Id },
+            trial.EndDate
+        );
+
+        // Schedule warning at day 10
+        await _eventBus.ScheduleAsync(
+            new TrialEndingWarningEvent { UserId = user.Id, DaysRemaining = 4 },
+            trial.EndDate.AddDays(-4)
+        );
+    }
+}
+```
+
+### Delayed Task Execution
+
+```csharp
+public class OrderService
+{
+    private readonly IEventBus _eventBus;
+
+    public async Task CreateOrderAsync(Order order)
+    {
+        // Save order...
+
+        // Schedule automatic cancellation if not paid within 30 minutes
+        var cancellationTime = DateTimeOffset.UtcNow.AddMinutes(30);
+        await _eventBus.ScheduleAsync(
+            new OrderAutoCancellationCheckEvent { OrderId = order.Id },
+            cancellationTime
+        );
+    }
+}
+
+public class OrderAutoCancellationHandler : IEventHandler<OrderAutoCancellationCheckEvent>
+{
+    private readonly IOrderRepository _orderRepository;
+    private readonly IEventBus _eventBus;
+
+    public async Task HandleAsync(
+        OrderAutoCancellationCheckEvent @event, 
+        CancellationToken ct)
+    {
+        var order = await _orderRepository.GetByIdAsync(@event.OrderId);
+
+        if (order.Status == OrderStatus.Pending)
+        {
+            order.Cancel("Payment timeout");
+            await _orderRepository.UpdateAsync(order);
+
+            await _eventBus.PublishAsync(new OrderCancelledEvent
+            {
+                OrderId = order.Id,
+                Reason = "Payment timeout"
+            });
+        }
+    }
+}
+```
+
+### Recurring Scheduled Tasks
+
+```csharp
+public class ReportingService
+{
+    private readonly IEventBus _eventBus;
+
+    public async Task ScheduleDailyReportAsync()
+    {
+        // Schedule next day's report at 8 AM
+        var tomorrow8AM = DateTimeOffset.UtcNow.Date.AddDays(1).AddHours(8);
+
+        await _eventBus.ScheduleAsync(
+            new GenerateDailyReportEvent { ReportDate = tomorrow8AM.Date },
+            tomorrow8AM
+        );
+    }
+}
+
+public class DailyReportHandler : IEventHandler<GenerateDailyReportEvent>
+{
+    private readonly IReportGenerator _reportGenerator;
+    private readonly IEventBus _eventBus;
+
+    public async Task HandleAsync(
+        GenerateDailyReportEvent @event, 
+        CancellationToken ct)
+    {
+        // Generate the report
+        await _reportGenerator.GenerateDailyReportAsync(@event.ReportDate);
+
+        // Schedule next day's report
+        var nextReportTime = @event.ReportDate.AddDays(1).AddHours(8);
+        await _eventBus.ScheduleAsync(
+            new GenerateDailyReportEvent { ReportDate = nextReportTime.Date },
+            nextReportTime
+        );
     }
 }
 ```
@@ -2106,6 +2544,62 @@ For the full license text, see [LICENSE](LICENSE) or visit https://www.apache.or
 - [Request a Feature](https://github.com/mahmudabir/EventBus/issues/new?template=feature_request.md)
 
 ## 📝 Changelog
+
+### Version 10.1.0 (Current)
+
+**🎯 Feature Release - Event Scheduling Support**
+
+**New Features:**
+- ⏰ **Event Scheduling**: Schedule events to be processed at a specific time in the future
+  - `ScheduleAsync<TEvent>(event, scheduleTime, cancellationToken)` - Schedule a single event
+  - `BulkScheduleAsync<TEvent>(events, scheduleTime, cancellationToken)` - Schedule multiple events
+- 📋 **Dual-Channel Architecture**: Separate channels for immediate and scheduled events
+  - `PublishingChannel` - For immediate event processing
+  - `SchedulingChannel` - For scheduled event processing
+- 🔄 **Parallel Processing**: Background service processes both channels concurrently
+- 🕐 **Automatic UTC Conversion**: Scheduled times are automatically converted to UTC
+- 🎯 **IEventProcessor Enhancement**: New `ProcessScheduledEventAsync` method for handling scheduled events
+
+**Use Cases:**
+- ⏱️ Delayed notifications and reminders
+- 📅 Trial period and subscription management
+- ⚠️ Time-based alerts and warnings
+- 🔁 Recurring scheduled tasks
+- ⏳ Deadline tracking and auto-cancellation
+- 📊 Scheduled report generation
+
+**Architecture Updates:**
+- Dual background processing tasks in `ChannelEventsHostedService`
+- Shared semaphore for concurrency control across both channels
+- Enhanced `EventChannelProvider` with scheduling channel support
+
+**Documentation:**
+- 📚 Complete API reference for scheduling methods
+- 💡 Comprehensive usage examples and best practices
+- 🧩 Advanced custom processor examples
+- ❓ FAQ section covering scheduling behavior
+- 🔧 Troubleshooting guide updated
+
+**Notes:**
+- Fully backward compatible with existing code
+- Channel mode required for true scheduling (General mode processes immediately)
+- Scheduled events are not persisted (lost on application restart)
+
+**Usage Example:**
+```csharp
+// Schedule a reminder 7 days before subscription expiry
+var reminderDate = subscription.ExpiryDate.AddDays(-7);
+await _eventBus.ScheduleAsync(
+    new SubscriptionExpiryReminderEvent 
+    { 
+        SubscriptionId = subscription.Id,
+        DaysRemaining = 7
+    },
+    reminderDate
+);
+```
+
+---
 
 ### Version 10.0.0 (2026-01-24)
 

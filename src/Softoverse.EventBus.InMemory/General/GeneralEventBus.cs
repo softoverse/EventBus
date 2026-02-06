@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Softoverse.EventBus.InMemory.Abstractions;
 
-namespace Softoverse.EventBus.InMemory.Infrastructure.General;
+namespace Softoverse.EventBus.InMemory.General;
 
 public class GeneralEventBus(
     IEventProcessor eventProcessor,
@@ -26,7 +26,7 @@ public class GeneralEventBus(
         }
     }
 
-    public async ValueTask BulkPublishAsync<TEvent>(List<TEvent> events, CancellationToken cancellationToken = default)
+    public async ValueTask BulkPublishAsync<TEvent>(IEnumerable<TEvent> events, CancellationToken cancellationToken = default)
         where TEvent : class, IEvent
     {
         foreach (var @event in events)
@@ -35,6 +35,36 @@ public class GeneralEventBus(
         }
 
         // var publishTasks = events.Select(@event => PublishAsync(@event, cancellationToken).AsTask());
+        // await Task.WhenAll(publishTasks);
+    }
+
+    public async ValueTask ScheduleAsync<TEvent>(TEvent @event, DateTimeOffset scheduleTime, CancellationToken cancellationToken = default)
+        where TEvent : class, IEvent
+    {
+        if (@event != null!)
+        {
+            logger.LogWarning("[GeneralEventBus] Ignored null event of type {EventType}", typeof(TEvent).Name);
+            return;
+        }
+        try
+        {
+            await eventProcessor.ProcessEventAsync(@event!, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "[GeneralEventBus] Failed to process event {EventType}", @event?.GetType().Name ?? "null");
+        }
+    }
+
+    public async ValueTask BulkScheduleAsync<TEvent>(IEnumerable<TEvent> events, DateTimeOffset scheduleTime, CancellationToken cancellationToken = default)
+        where TEvent : class, IEvent
+    {
+        foreach (var @event in events)
+        {
+            await ScheduleAsync(@event, scheduleTime, cancellationToken).ConfigureAwait(false);
+        }
+
+        // var publishTasks = events.Select(@event => ScheduleAsync(@event, scheduleTime, cancellationToken).AsTask());
         // await Task.WhenAll(publishTasks);
     }
 
