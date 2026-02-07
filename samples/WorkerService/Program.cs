@@ -1,3 +1,4 @@
+using System.Reflection;
 using SampleCore;
 using Softoverse.EventBus.InMemory;
 using WorkerService;
@@ -5,7 +6,13 @@ using WorkerService;
 var builder = Host.CreateApplicationBuilder(args);
 builder.Services.AddHostedService<BackgroundWorkerService>();
 
-builder.Services.AddEventBus(builder.Configuration, typeof(Program).Assembly, typeof(TestScheduledHandler).Assembly);
+List<Assembly> assemblies =
+[
+    typeof(Program).Assembly,
+    typeof(TestEvent).Assembly
+];
+
+builder.Services.AddEventBus(builder.Configuration, assemblies);
 builder.Services.AddSingleton(new EventTracker());
 
 var host = builder.Build();
