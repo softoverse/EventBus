@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using System.Reflection;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using SampleCore;
@@ -24,15 +25,19 @@ public abstract class BaseTest(string configFileName, bool useDefaultEventProces
         hostBuilder.Configuration.AddJsonFile(configFileName, optional: false, reloadOnChange: true);
         _configuration = hostBuilder.Configuration;
 
+        List<Assembly> assemblies =
+        [
+            typeof(BaseTest).Assembly,
+            typeof(TestEvent).Assembly
+        ];
+        
         if (useDefaultEventProcessor)
         {
-            hostBuilder.Services.AddEventBus(hostBuilder.Configuration, typeof(BaseTest).Assembly);
+            hostBuilder.Services.AddEventBus(hostBuilder.Configuration, assemblies);
         }
         else
         {
-            hostBuilder.Services.AddEventBus<CustomEventProcessor>(hostBuilder.Configuration, typeof(BaseTest).Assembly);
-            // hostBuilder.Services.AddScoped<IRequestHandler<TestRequest, bool>, TestRequestHandler>();
-            // hostBuilder.Services.AddScoped<IRequestHandler<TestRequest, bool>, TestRequestHandler>();
+            hostBuilder.Services.AddEventBus<CustomEventProcessor>(hostBuilder.Configuration, assemblies);
         }
         hostBuilder.Services.AddSingleton(new EventTracker());
 
