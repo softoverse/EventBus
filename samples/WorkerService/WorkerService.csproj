@@ -11,8 +11,8 @@
         <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.2"/>
     </ItemGroup>
 
-    <ItemGroup>    
-      <ProjectReference Include="..\..\src\Softoverse.EventBus.InMemory\Softoverse.EventBus.InMemory.csproj" />
-      <ProjectReference Include="..\..\tests\EventBus.InMemory.Tests\EventBus.InMemory.Tests.csproj" />
+    <ItemGroup>
+      <ProjectReference Include="..\SampleCore\SampleCore.csproj" />
     </ItemGroup>
+
 </Project>

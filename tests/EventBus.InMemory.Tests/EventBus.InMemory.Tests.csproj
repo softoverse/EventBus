@@ -30,7 +30,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Softoverse.EventBus.InMemory\Softoverse.EventBus.InMemory.csproj" />
+    <ProjectReference Include="..\..\samples\SampleCore\SampleCore.csproj" />
   </ItemGroup>
 
 </Project>

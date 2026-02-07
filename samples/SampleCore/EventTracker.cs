@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace EventBus.InMemory.Tests.Implementations;
+namespace SampleCore;
 
 public class EventTracker
 {

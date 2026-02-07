@@ -1,10 +1,8 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using Softoverse.EventBus.InMemory.Abstractions;
 
-using Softoverse.EventBus.InMemory.Abstractions;
+namespace SampleCore;
 
-namespace EventBus.InMemory.Tests.Implementations;
-
-internal class EventProcessor(
+public class CustomEventProcessor(
     IEventHandler<TestEvent> testEventHandler,
     IEventHandler<TestScheduledEvent> testScheduledHandler,
     EventTracker eventTracker) : IEventProcessor
@@ -29,6 +27,7 @@ internal class EventProcessor(
     {
         eventTracker.ScheduledEvents.Add((@event as TestEvent)?.Id ?? 0);
         int delayMs = (int)(scheduledTime - DateTimeOffset.UtcNow).TotalMilliseconds;
+        delayMs = delayMs < 0 ? 0 : delayMs;
         await Task.Delay(delayMs, cancellationToken);
         await testScheduledHandler.HandleAsync(@event, cancellationToken);
     }

@@ -1,4 +1,4 @@
-using EventBus.InMemory.Tests.Implementations;
+using SampleCore;
 using Softoverse.EventBus.InMemory;
 using WorkerService;
 

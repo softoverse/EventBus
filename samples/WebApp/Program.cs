@@ -1,4 +1,5 @@
-using EventBus.InMemory.Tests.Implementations;
+using System.Reflection;
+using SampleCore;
 using Softoverse.EventBus.InMemory;
 using WebApp;
 
@@ -9,7 +10,20 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
 builder.Services.AddSwaggerGen();
 
-builder.Services.AddEventBus(builder.Configuration, typeof(Program).Assembly, typeof(TestScheduledHandler).Assembly);
+List<Assembly> assemblies = [
+    typeof(Program).Assembly, 
+    typeof(TestScheduledHandler).Assembly
+];
+
+if (Convert.ToBoolean(builder.Configuration["UseCustomEventProcessor"]))
+{
+    builder.Services.AddEventBus<CustomEventProcessor>(builder.Configuration, assemblies);
+}
+else
+{
+    builder.Services.AddEventBus(builder.Configuration, assemblies);
+}
+
 builder.Services.AddSingleton(new EventTracker());
 
 var app = builder.Build();

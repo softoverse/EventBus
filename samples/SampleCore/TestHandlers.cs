@@ -1,6 +1,6 @@
 ﻿using Softoverse.EventBus.InMemory.Abstractions;
 
-namespace EventBus.InMemory.Tests.Implementations;
+namespace SampleCore;
 
 public class TestEventHandler(EventTracker eventTracker) : IEventHandler<TestEvent>
 {

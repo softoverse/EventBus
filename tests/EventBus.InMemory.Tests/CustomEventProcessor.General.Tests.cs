@@ -1,4 +1,4 @@
-﻿using EventBus.InMemory.Tests.Implementations;
+﻿using SampleCore;
 
 namespace EventBus.InMemory.Tests;
 

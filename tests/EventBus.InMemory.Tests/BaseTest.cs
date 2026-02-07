@@ -1,7 +1,7 @@
-﻿using EventBus.InMemory.Tests.Implementations;
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using SampleCore;
 using Softoverse.EventBus.InMemory;
 using Softoverse.EventBus.InMemory.Abstractions;
 
@@ -30,7 +30,7 @@ public abstract class BaseTest(string configFileName, bool useDefaultEventProces
         }
         else
         {
-            hostBuilder.Services.AddEventBus<EventProcessor>(hostBuilder.Configuration, typeof(BaseTest).Assembly);
+            hostBuilder.Services.AddEventBus<CustomEventProcessor>(hostBuilder.Configuration, typeof(BaseTest).Assembly);
             // hostBuilder.Services.AddScoped<IRequestHandler<TestRequest, bool>, TestRequestHandler>();
             // hostBuilder.Services.AddScoped<IRequestHandler<TestRequest, bool>, TestRequestHandler>();
         }
