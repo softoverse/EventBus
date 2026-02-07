@@ -21,13 +21,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="appSettings.General.json">
+    <Content Include="appSettings.Channel.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-  </ItemGroup>
-
-  <ItemGroup>
-    <Content Include="appSettings.Channel.json">
+    <Content Include="appSettings.General.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

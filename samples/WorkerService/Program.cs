@@ -5,7 +5,7 @@ using WorkerService;
 var builder = Host.CreateApplicationBuilder(args);
 builder.Services.AddHostedService<BackgroundWorkerService>();
 
-builder.Services.AddEventBus(builder.Configuration, typeof(Program).Assembly);
+builder.Services.AddEventBus(builder.Configuration, typeof(Program).Assembly, typeof(TestScheduledHandler).Assembly);
 builder.Services.AddSingleton(new EventTracker());
 
 var host = builder.Build();
