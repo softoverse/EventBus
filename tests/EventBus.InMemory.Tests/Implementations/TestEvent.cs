@@ -1,21 +1,15 @@
 ﻿using System.Collections.Concurrent;
-
 using Softoverse.EventBus.InMemory.Abstractions;
 
 namespace EventBus.InMemory.Tests.Implementations;
 
-internal class TestEvent(int id) : IEvent
+public class EventTracker
 {
-    public int Id { get; set; } = id;
-}
+    public ConcurrentBag<int> ProcessedEvents { get; } = new();
+    public ConcurrentBag<int> ScheduledEvents { get; } = new();
+    public ConcurrentBag<int> InvokedEvents { get; } = new();
 
-internal static class EventTracker
-{
-    public static ConcurrentBag<int> ProcessedEvents { get; } = new();
-    public static ConcurrentBag<int> ScheduledEvents { get; } = new();
-    public static ConcurrentBag<int> InvokedEvents { get; } = new();
-
-    public static void Clear()
+    public void Clear()
     {
         ProcessedEvents.Clear();
         ScheduledEvents.Clear();
@@ -23,20 +17,45 @@ internal static class EventTracker
     }
 }
 
-internal class TestEventHandler : IEventHandler<TestEvent>
+internal class TestEvent(int id) : IEvent
+{
+    public int Id { get; set; } = id;
+}
+
+internal class TestRequest(int id) : IEvent,
+                                     IRequest
+{
+    public int Id { get; set; } = id;
+}
+
+internal class TestScheduledEvent(int id) : IEvent
+{
+    public int Id { get; set; } = id;
+}
+
+internal class TestEventHandler(EventTracker eventTracker) : IEventHandler<TestEvent>
 {
     public Task HandleAsync(TestEvent @event, CancellationToken cancellationToken = default)
     {
-        EventTracker.ProcessedEvents.Add(@event.Id);
+        eventTracker.ProcessedEvents.Add(@event.Id);
         return Task.CompletedTask;
     }
 }
 
-internal class TestInvokeHandler
+internal class TestScheduledHandler(EventTracker eventTracker) : IEventHandler<TestScheduledEvent>
 {
-    public Task<bool> HandleAsync(TestEvent @event, CancellationToken cancellationToken = default)
+    public Task HandleAsync(TestScheduledEvent @event, CancellationToken cancellationToken = default)
     {
-        EventTracker.InvokedEvents.Add(@event.Id);
+        eventTracker.ScheduledEvents.Add(@event.Id);
+        return Task.CompletedTask;
+    }
+}
+
+internal class TestRequestHandler(EventTracker eventTracker) : IRequestHandler<TestRequest, bool>
+{
+    public Task<bool> HandleAsync(TestRequest @event, CancellationToken cancellationToken = default)
+    {
+        eventTracker.InvokedEvents.Add(@event.Id);
         return Task.FromResult(true);
     }
 }

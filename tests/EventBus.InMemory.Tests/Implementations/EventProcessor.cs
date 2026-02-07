@@ -4,11 +4,14 @@ using Softoverse.EventBus.InMemory.Abstractions;
 
 namespace EventBus.InMemory.Tests.Implementations;
 
-internal class EventProcessor(IEventHandler<TestEvent> testEventHandler) : IEventProcessor
+internal class EventProcessor(
+    IEventHandler<TestEvent> testEventHandler,
+    IEventHandler<TestScheduledEvent> testScheduledHandler,
+    EventTracker eventTracker) : IEventProcessor
 {
     public async Task<TResult> InvokeAsync<TResult>(object @event, CancellationToken cancellationToken = default)
     {
-        var result = await new TestInvokeHandler().HandleAsync(@event as TestEvent, cancellationToken);
+        var result = await new TestRequestHandler(eventTracker).HandleAsync(@event as TestRequest, cancellationToken);
         return result as dynamic;
     }
 
@@ -24,8 +27,9 @@ internal class EventProcessor(IEventHandler<TestEvent> testEventHandler) : IEven
 
     public async Task ProcessScheduledEventAsync(IEvent @event, DateTimeOffset scheduledTime, CancellationToken cancellationToken = default)
     {
-        EventTracker.ScheduledEvents.Add((@event as TestEvent)?.Id ?? 0);
-        await Task.Delay(scheduledTime - DateTimeOffset.UtcNow, cancellationToken);
-        await testEventHandler.HandleAsync(@event, cancellationToken);
+        eventTracker.ScheduledEvents.Add((@event as TestEvent)?.Id ?? 0);
+        int delayMs = (int)(scheduledTime - DateTimeOffset.UtcNow).TotalMilliseconds;
+        await Task.Delay(delayMs, cancellationToken);
+        await testScheduledHandler.HandleAsync(@event, cancellationToken);
     }
 }

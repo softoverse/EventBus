@@ -72,7 +72,7 @@ public class GeneralEventBus(
     {
         if (@event == null!)
         {
-            logger.LogWarning("[GeneralEventBus] Ignored null event of type {EventType}", @event.GetType().Name);
+            logger.LogWarning("[GeneralEventBus] Ignored null event of type {EventType}", @event?.GetType().Name);
         }
         try
         {

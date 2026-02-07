@@ -11,5 +11,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/EventBus.InMemory.Tests/EventBus.InMemory.Tests.csproj" Id="3e938904-b839-4139-a5f5-e58be430a121" />
+    <Project Path="tests/WorkerService/WorkerService.csproj" />
   </Folder>
 </Solution>
