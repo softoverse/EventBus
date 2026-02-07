@@ -13,5 +13,6 @@
 
     <ItemGroup>
       <ProjectReference Include="..\..\src\Softoverse.EventBus.InMemory\Softoverse.EventBus.InMemory.csproj" />
+      <ProjectReference Include="..\EventBus.InMemory.Tests\EventBus.InMemory.Tests.csproj" />
     </ItemGroup>
 </Project>

@@ -9,7 +9,6 @@ namespace EventBus.InMemory.Tests;
 
 public abstract class BaseTest(string configFileName, bool useDefaultEventProcessor = false) : IAsyncLifetime
 {
-
     private IHost _host;
     private IConfiguration _configuration;
 
@@ -23,8 +22,8 @@ public abstract class BaseTest(string configFileName, bool useDefaultEventProces
 
         // Load appSettings.json into configuration
         hostBuilder.Configuration.AddJsonFile(configFileName, optional: false, reloadOnChange: true);
-
         _configuration = hostBuilder.Configuration;
+
         if (useDefaultEventProcessor)
         {
             hostBuilder.Services.AddEventBus(hostBuilder.Configuration, typeof(BaseTest).Assembly);
@@ -59,7 +58,7 @@ public abstract class BaseTest(string configFileName, bool useDefaultEventProces
 
     protected async Task WaitForProcessingAsync(int count = 0)
     {
-        var delayMs = (_delayMilliseconds * Math.Abs(count)) + 1000; // Add extra time to ensure processing is complete
+        int delayMs = (_delayMilliseconds * Math.Abs(count)) + 1000; // Add extra time to ensure processing is complete
         // Wait for a reasonable time to allow events to be processed
         await Task.Delay(delayMs);
     }
