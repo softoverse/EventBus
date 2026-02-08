@@ -4,7 +4,7 @@ using Softoverse.EventBus.InMemory.Abstractions;
 
 namespace Softoverse.EventBus.InMemory.Infrastructure;
 
-public class ChannelEventBus(
+internal class ChannelEventBus(
     EventChannelProvider channelProvider,
     IEventProcessor eventProcessor,
     ILogger<ChannelEventBus> logger)

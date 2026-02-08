@@ -7,7 +7,7 @@ using Softoverse.EventBus.InMemory.Models.Settings;
 
 namespace Softoverse.EventBus.InMemory.Infrastructure.Services;
 
-public class ChannelEventsSchedulingHostedService(
+internal class ChannelEventsSchedulingHostedService(
     IServiceScopeFactory scopeFactory,
     EventBusSettings eventBusSettings,
     EventChannelProvider channelProvider,

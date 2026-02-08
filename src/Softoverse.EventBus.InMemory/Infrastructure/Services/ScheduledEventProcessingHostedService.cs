@@ -11,7 +11,7 @@ namespace Softoverse.EventBus.InMemory.Infrastructure.Services;
 /// Background service that periodically checks for scheduled events that are due
 /// and processes them through the event processor.
 /// </summary>
-public class ScheduledEventProcessingHostedService(
+internal class ScheduledEventProcessingHostedService(
     IServiceScopeFactory scopeFactory,
     ScheduledEventStore scheduledEventStore,
     EventBusSettings eventBusSettings,

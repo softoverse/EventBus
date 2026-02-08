@@ -1,11 +1,10 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-
 using Softoverse.EventBus.InMemory.Abstractions;
 
 namespace Softoverse.EventBus.InMemory.Infrastructure;
 
-public class InMemoryEventProcessor(
+internal class InMemoryEventProcessor(
     IServiceScopeFactory scopeFactory,
     ILogger<InMemoryEventProcessor> logger,
     ScheduledEventStore scheduledEventStore) : IEventProcessor
@@ -32,12 +31,12 @@ public class InMemoryEventProcessor(
         }
     }
 
-    public async Task ProcessScheduledEventAsync(IEvent @event, DateTimeOffset scheduledTime, CancellationToken cancellationToken = default)
+    public Task ProcessScheduledEventAsync(IEvent @event, DateTimeOffset scheduledTime, CancellationToken cancellationToken = default)
     {
         if (@event == null!)
         {
             logger.LogWarning("[InMemoryEventProcessor] Ignored null scheduled event");
-            return;
+            return Task.CompletedTask;
         }
 
         var scheduledTimeUtc = scheduledTime.ToUniversalTime();
@@ -50,7 +49,7 @@ public class InMemoryEventProcessor(
         // Store the event in the in-memory store for background processing
         scheduledEventStore.AddScheduledEvent(@event, scheduledTimeUtc);
 
-        await Task.CompletedTask;
+        return Task.CompletedTask;
     }
 
     public Task ProcessEventHandlersAsync(IEvent @event, CancellationToken cancellationToken = default)
@@ -60,29 +59,29 @@ public class InMemoryEventProcessor(
             logger.LogWarning("[InMemoryEventProcessor] Ignored null event in ProcessEventHandlersAsync");
             return Task.CompletedTask;
         }
-    
+
         _ = Task.Run(async () =>
         {
             await using var scope = scopeFactory.CreateAsyncScope();
             var handlers = scope.ServiceProvider.GetServices<IEventHandler>();
-    
+
             var applicableHandlers = handlers.Where(h => h.CanHandle(@event)).ToList();
-    
+
             if (applicableHandlers.Count == 0)
             {
                 logger.LogWarning("[InMemoryEventProcessor] No handlers found for event type {EventType}", @event.GetType().Name);
                 return;
             }
-    
+
             logger.LogInformation(
                                   "[InMemoryEventProcessor] Found {HandlerCount} handler(s) for event type {EventType}",
                                   applicableHandlers.Count,
                                   @event.GetType().Name);
-    
+
             var handlerTasks = applicableHandlers.Select(handler =>
                                                              SafeHandleAsync(handler, @event, cancellationToken));
-    
-            await Task.WhenAll(handlerTasks).ConfigureAwait(false); 
+
+            await Task.WhenAll(handlerTasks).ConfigureAwait(false);
         }, cancellationToken);
         return Task.CompletedTask;
     }
@@ -112,7 +111,7 @@ public class InMemoryEventProcessor(
                 object? result = await baseHandler
                     .HandleAsync(@event, cancellationToken);
 
-                return (TResult?)result!;
+                return (TResult?) result!;
             }
 
             logger.LogWarning("[InMemoryEventProcessor] No handler found for event type {EventType}", @event.GetType().Name);

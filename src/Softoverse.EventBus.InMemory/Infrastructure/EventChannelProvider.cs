@@ -5,7 +5,7 @@ using Softoverse.EventBus.InMemory.Models.Settings;
 
 namespace Softoverse.EventBus.InMemory.Infrastructure;
 
-public sealed class EventChannelProvider
+internal sealed class EventChannelProvider
 {
     public Channel<IEvent> PublishingChannel { get; }
     public Channel<(IEvent Event, DateTimeOffset ScheduledTime)> SchedulingChannel { get; }
