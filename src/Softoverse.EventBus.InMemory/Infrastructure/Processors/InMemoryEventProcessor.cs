@@ -4,9 +4,9 @@ using Softoverse.EventBus.InMemory.Abstractions;
 
 namespace Softoverse.EventBus.InMemory.Infrastructure.Processors;
 
-public class DefaultEventProcessor(
+public class InMemoryEventProcessor(
     IServiceScopeFactory scopeFactory,
-    ILogger<DefaultEventProcessor> logger,
+    ILogger<InMemoryEventProcessor> logger,
     ScheduledEventStore scheduledEventStore) : IEventProcessor
 {
 
@@ -14,11 +14,11 @@ public class DefaultEventProcessor(
     {
         if (@event == null!)
         {
-            logger.LogWarning("[DefaultEventProcessor] Ignored null event");
+            logger.LogWarning("[InMemoryEventProcessor] Ignored null event");
             return;
         }
 
-        logger.LogInformation("[DefaultEventProcessor] Processing event {EventType}", @event.GetType().Name);
+        logger.LogInformation("[InMemoryEventProcessor] Processing event {EventType}", @event.GetType().Name);
 
         try
         {
@@ -26,7 +26,7 @@ public class DefaultEventProcessor(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "[DefaultEventProcessor] Failed to process event {EventType}", @event.GetType().Name);
+            logger.LogError(ex, "[InMemoryEventProcessor] Failed to process event {EventType}", @event.GetType().Name);
             throw;
         }
     }
@@ -35,14 +35,14 @@ public class DefaultEventProcessor(
     {
         if (@event == null!)
         {
-            logger.LogWarning("[DefaultEventProcessor] Ignored null scheduled event");
+            logger.LogWarning("[InMemoryEventProcessor] Ignored null scheduled event");
             return;
         }
 
         var scheduledTimeUtc = scheduledTime.ToUniversalTime();
 
         logger.LogInformation(
-                              "[DefaultEventProcessor] Scheduling event {EventType} for {ScheduledTime} (UTC)",
+                              "[InMemoryEventProcessor] Scheduling event {EventType} for {ScheduledTime} (UTC)",
                               @event.GetType().Name,
                               scheduledTimeUtc);
 
@@ -56,7 +56,7 @@ public class DefaultEventProcessor(
     {
         if (@event == null!)
         {
-            logger.LogWarning("[DefaultEventProcessor] Ignored null event in ProcessEventHandlersAsync");
+            logger.LogWarning("[InMemoryEventProcessor] Ignored null event in ProcessEventHandlersAsync");
             return Task.CompletedTask;
         }
     
@@ -69,12 +69,12 @@ public class DefaultEventProcessor(
     
             if (applicableHandlers.Count == 0)
             {
-                logger.LogWarning("[DefaultEventProcessor] No handlers found for event type {EventType}", @event.GetType().Name);
+                logger.LogWarning("[InMemoryEventProcessor] No handlers found for event type {EventType}", @event.GetType().Name);
                 return;
             }
     
             logger.LogInformation(
-                                  "[DefaultEventProcessor] Found {HandlerCount} handler(s) for event type {EventType}",
+                                  "[InMemoryEventProcessor] Found {HandlerCount} handler(s) for event type {EventType}",
                                   applicableHandlers.Count,
                                   @event.GetType().Name);
     
@@ -90,11 +90,11 @@ public class DefaultEventProcessor(
     {
         if (@event == null!)
         {
-            logger.LogWarning("[DefaultEventProcessor] Ignored null event in InvokeAsync");
+            logger.LogWarning("[InMemoryEventProcessor] Ignored null event in InvokeAsync");
             return default!;
         }
 
-        logger.LogInformation("[DefaultEventProcessor] Invoking event {EventType}", @event.GetType().Name);
+        logger.LogInformation("[InMemoryEventProcessor] Invoking event {EventType}", @event.GetType().Name);
 
         try
         {
@@ -114,13 +114,13 @@ public class DefaultEventProcessor(
                 return (TResult?)result!;
             }
 
-            logger.LogWarning("[DefaultEventProcessor] No handler found for event type {EventType}", @event.GetType().Name);
+            logger.LogWarning("[InMemoryEventProcessor] No handler found for event type {EventType}", @event.GetType().Name);
             return default!;
 
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "[DefaultEventProcessor] Failed to invoke event {EventType}", @event.GetType().Name);
+            logger.LogError(ex, "[InMemoryEventProcessor] Failed to invoke event {EventType}", @event.GetType().Name);
             throw;
         }
     }
@@ -131,7 +131,7 @@ public class DefaultEventProcessor(
         {
             await handler.HandleAsync(@event, cancellationToken).ConfigureAwait(false);
             logger.LogInformation(
-                                  "[DefaultEventProcessor] Handler {HandlerType} successfully processed event {EventType}",
+                                  "[InMemoryEventProcessor] Handler {HandlerType} successfully processed event {EventType}",
                                   handler.GetType().Name,
                                   @event.GetType().Name);
         }
@@ -139,7 +139,7 @@ public class DefaultEventProcessor(
         {
             logger.LogError(
                             ex,
-                            "[DefaultEventProcessor] Handler {HandlerType} failed to process event {EventType}",
+                            "[InMemoryEventProcessor] Handler {HandlerType} failed to process event {EventType}",
                             handler.GetType().Name,
                             @event.GetType().Name);
             // Don't re-throw to allow other handlers to continue processing

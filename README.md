@@ -77,10 +77,11 @@ public class OrderCreatedHandler : IEventHandler<OrderCreatedEvent>
 
 ```csharp
 using Softoverse.EventBus.InMemory;
+using Softoverse.EventBus.InMemory.Infrastructure.Processors;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Register with DefaultEventProcessor (recommended for most cases)
+// Register with InMemoryEventProcessor (recommended for most cases)
 builder.Services.AddEventBus(
     builder.Configuration,
     [typeof(Program).Assembly]  // Assemblies containing your handlers
@@ -603,7 +604,7 @@ public async Task HandleAsync(OrderCreatedEvent @event, CancellationToken ct)
 
 ### Scheduled Events Not Executing
 
-1. **Verify DefaultEventProcessor**: Use the parameterless `AddEventBus()` overload
+1. **Verify InMemoryEventProcessor**: Use the parameterless `AddEventBus()` overload
 2. **Check Time**: Ensure scheduled time is in the future
 3. **Review Logs**: Check `ScheduledEventProcessingHostedService` logs
 

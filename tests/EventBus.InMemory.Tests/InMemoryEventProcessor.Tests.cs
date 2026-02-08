@@ -2,7 +2,7 @@
 
 namespace EventBus.InMemory.Tests;
 
-public class DefaultEventProcessorTest()
+public class InMemoryEventProcessorTest()
     : BaseTest(configFileName: "appSettings.Channel.json",
                useDefaultEventProcessor: true)
 {

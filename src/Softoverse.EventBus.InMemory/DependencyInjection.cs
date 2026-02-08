@@ -15,12 +15,7 @@ public static class DependencyInjection
     
     public static IServiceCollection AddEventBus<TEventProcessor>(this IServiceCollection services, IConfiguration configuration, params List<Assembly> assemblies)
         where TEventProcessor : class, IEventProcessor
-    {
-        if (typeof(TEventProcessor) == typeof(DefaultEventProcessor))
-        {
-            throw new Exception("Use AddEventBus overload without type parameter to use DefaultEventProcessor");
-        }
-        
+    {        
         UsingDefaultEventProcessor = false;
         string eventBusType = configuration[BuildConstants.EventBusTypeConfigPath] ?? BuildConstants.Channel;
 
@@ -47,30 +42,12 @@ public static class DependencyInjection
 
     public static IServiceCollection AddEventBus(this IServiceCollection services, IConfiguration configuration, params List<Assembly> assemblies)
     {
+        services.AddEventBus<InMemoryEventProcessor>(configuration, assemblies);
         UsingDefaultEventProcessor = true;
-        string eventBusType = configuration[BuildConstants.EventBusTypeConfigPath] ?? BuildConstants.Channel;
-
-        services.AddEventBusSettings(configuration);
-        services.AddScoped<IEventProcessor, DefaultEventProcessor>();
 
         services.AddSingleton<ScheduledEventStore>();
         services.AddHostedService<ScheduledEventProcessingHostedService>();
 
-        if (string.Equals(eventBusType, BuildConstants.Channel, StringComparison.OrdinalIgnoreCase))
-        {
-            services.AddHostedService<ChannelEventsPublishingHostedService>();
-            services.AddHostedService<ChannelEventsSchedulingHostedService>();
-            services.AddSingleton<EventChannelProvider>();
-            services.AddScoped<ChannelEventBus>();
-            services.AddScoped<IEventBus>(sp => sp.GetRequiredService<ChannelEventBus>());
-        }
-        else
-        {
-            services.AddScoped<IEventBus, GeneralEventBus>();
-        }
-
-        // Register all IEventHandler<T> implementations from application assemblies
-        RegisterHandlersFromAssembly(services, assemblies);
         return services;
     }
 
@@ -117,12 +94,13 @@ public static class DependencyInjection
                     foreach (var gi in genericInterfaces)
                     {
                         services.AddScoped(gi, implType);
-                        services.AddScoped(implType);
+                        //services.AddScoped(implType);
                     }
                 }
             }
             
 
+            var genericRequestHandlerTypes = new HashSet<Type>();
             var requestHandlerTypes = assembly.GetTypes().Where(t => t is
                                                   {
                                                       IsClass   : true,
@@ -142,8 +120,13 @@ public static class DependencyInjection
                                                     .Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeOfGenericIRequestHandler);
                     foreach (var gi in genericInterfaces)
                     {
+                        if (genericRequestHandlerTypes.TryGetValue(gi, out _))
+                        {
+                            throw new Exception($"Multiple implementations of {gi} found. Please ensure only one implementation exists for each IRequestHandler<TRequest, TResponse>.");
+                        }
+                        genericRequestHandlerTypes.Add(gi);
                         services.AddScoped(gi, implType);
-                        services.AddScoped(implType);
+                        //services.AddScoped(implType);
                     }
                 }
             }

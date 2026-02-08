@@ -32,7 +32,10 @@ public class ScheduledEventProcessingHostedService(
         {
             try
             {
-                await ProcessDueEventsAsync(stoppingToken);
+                _ = Task.Run(async () =>
+                {
+                    await ProcessDueEventsAsync(stoppingToken);
+                }, stoppingToken);
 
                 // Wait before checking again
                 await Task.Delay(checkInterval, stoppingToken);
@@ -57,7 +60,7 @@ public class ScheduledEventProcessingHostedService(
     {
         var dueEvents = scheduledEventStore.GetDueEvents();
 
-        if (!dueEvents.Any())
+        if (dueEvents.Count == 0)
         {
             return;
         }
@@ -69,11 +72,15 @@ public class ScheduledEventProcessingHostedService(
         // Process events respecting the EventProcessorCapacity
         var processingTasks = new List<Task>();
 
+        //await using var scope = scopeFactory.CreateAsyncScope();
+        //var eventBus = scope.ServiceProvider.GetRequiredService<IEventBus>();
+
         foreach (var scheduledEvent in dueEvents)
         {
             // Wait for available capacity
             await _semaphore.WaitAsync(cancellationToken);
 
+            //var task = eventBus.PublishAsync(scheduledEvent.Event).AsTask();
             var task = ProcessScheduledEventAsync(scheduledEvent, cancellationToken);
             processingTasks.Add(task);
         }
@@ -86,7 +93,7 @@ public class ScheduledEventProcessingHostedService(
     {
         try
         {
-            using var scope = scopeFactory.CreateScope();
+            await using var scope = scopeFactory.CreateAsyncScope();
             var eventProcessor = scope.ServiceProvider.GetRequiredService<IEventProcessor>();
 
             logger.LogInformation(

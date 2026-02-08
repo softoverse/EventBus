@@ -222,9 +222,9 @@ public interface IEventProcessor
 }
 ```
 
-#### DefaultEventProcessor
+#### InMemoryEventProcessor
 
-The library provides a built-in `DefaultEventProcessor` with the following features:
+The library provides a built-in `InMemoryEventProcessor` with the following features:
 
 **Key Features**:
 - **In-Memory Scheduling**: Built-in scheduled event support via `ScheduledEventStore`
@@ -401,14 +401,14 @@ protected override async Task ExecuteAsync(CancellationToken ct)
 
 #### ScheduledEventProcessingHostedService
 
-**Purpose**: Background service for processing in-memory scheduled events (used with `DefaultEventProcessor`).
+**Purpose**: Background service for processing in-memory scheduled events (used with `InMemoryEventProcessor`).
 
 **Design Decisions**:
 - Implements `BackgroundService` for automatic lifecycle management
 - Periodically checks `ScheduledEventStore` for due events
 - Uses `SemaphoreSlim` to control concurrency
 - Independent from channel-based services
-- Only registered when using `DefaultEventProcessor`
+- Only registered when using `InMemoryEventProcessor`
 
 **Key Features**:
 - **Periodic Polling**: Checks for due events at configurable intervals
@@ -513,7 +513,7 @@ EventProcessorCapacity = 10              // Up to 10 events processing simultane
 Handlers per event = 3                   // Each event triggers 3 handlers
 Total concurrent handlers per service = 30  // 10 events × 3 handlers
 
-// With three services (when using DefaultEventProcessor):
+// With three services (when using InMemoryEventProcessor):
 // - ChannelEventsPublishingHostedService: 30 handlers
 // - ChannelEventsSchedulingHostedService: 30 handlers  
 // - ScheduledEventProcessingHostedService: 30 handlers
@@ -537,7 +537,7 @@ Total concurrent handlers (both) = 60    // 30 + 30
 - If multiple threads call `PublishAsync`, multiple events process concurrently
 - No built-in concurrency limits
 
-### In-Memory Scheduling (DefaultEventProcessor)
+### In-Memory Scheduling (InMemoryEventProcessor)
 
 **How it Works**:
 
@@ -564,7 +564,7 @@ Total concurrent handlers (both) = 60    // 30 + 30
 ```
 1. ScheduleAsync(event, scheduledTime) 
    ↓
-2. DefaultEventProcessor.ProcessScheduledEventAsync()
+2. InMemoryEventProcessor.ProcessScheduledEventAsync()
    ↓
 3. ScheduledEventStore.AddScheduledEvent(event, time)
    ↓
@@ -586,7 +586,7 @@ Total concurrent handlers (both) = 60    // 30 + 30
 
 The library provides two registration overloads:
 
-#### 1. With DefaultEventProcessor (Recommended)
+#### 1. With InMemoryEventProcessor (Recommended)
 
 ```csharp
 builder.Services.AddEventBus(
@@ -597,7 +597,7 @@ builder.Services.AddEventBus(
 
 **Registers**:
 - `IEventBus` (ChannelEventBus or GeneralEventBus based on config)
-- `IEventProcessor` as `DefaultEventProcessor`
+- `IEventProcessor` as `InMemoryEventProcessor`
 - `ScheduledEventStore` (Singleton)
 - `ScheduledEventProcessingHostedService` (BackgroundService)
 - `ChannelEventsPublishingHostedService` (if Channel mode)
@@ -1048,9 +1048,9 @@ public class PersistentScheduledEventStore
 - ❌ Blocks publisher
 - ❌ Lower throughput
 
-### DefaultEventProcessor vs Custom Processor
+### InMemoryEventProcessor vs Custom Processor
 
-**DefaultEventProcessor**:
+**InMemoryEventProcessor**:
 - ✅ Built-in scheduled event support
 - ✅ Fire-and-forget execution (non-blocking)
 - ✅ In-memory storage via ScheduledEventStore
@@ -1070,7 +1070,7 @@ public class PersistentScheduledEventStore
 
 ### In-Memory Scheduling vs External Scheduler
 
-**In-Memory Scheduling** (DefaultEventProcessor):
+**In-Memory Scheduling** (InMemoryEventProcessor):
 - ✅ No external dependencies
 - ✅ Simple setup
 - ✅ Fast for short delays
@@ -1100,7 +1100,7 @@ Potential improvements:
 6. **Saga Support**: Long-running transaction coordination
 7. **Priority Queue**: Process high-priority events first
 8. **Batching**: Batch similar events for efficiency
-9. **Retry Policies**: Built-in configurable retry strategies in DefaultEventProcessor
+9. **Retry Policies**: Built-in configurable retry strategies in InMemoryEventProcessor
 10. **Distributed Scheduling**: Integration with external schedulers (Hangfire, Quartz.NET)
 11. **Event Sourcing**: Integration with event sourcing patterns
 12. **Streaming Support**: Integration with streaming platforms (Kafka, Event Hubs)
@@ -1135,7 +1135,7 @@ src/Softoverse.EventBus.InMemory/
 │   ├── General/              # Direct processing implementations
 │   │   └── GeneralEventBus.cs
 │   └── Processors/           # Event processor implementations
-│       ├── DefaultEventProcessor.cs
+│       ├── InMemoryEventProcessor.cs
 │       ├── ScheduledEventStore.cs
 │       └── ScheduledEventProcessingHostedService.cs
 ├── Models/                    # Data models and settings

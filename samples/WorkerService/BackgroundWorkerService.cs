@@ -12,14 +12,16 @@ public class BackgroundWorkerService(IServiceScopeFactory scopeFactory, ILogger<
         // Ensure the scope is created before resolving services
         await using var scope = scopeFactory.CreateAsyncScope();
         var eventBus = scope.ServiceProvider.GetRequiredService<IEventBus>();
-        
+
         while (!stoppingToken.IsCancellationRequested)
         {
             await Task.Delay(2000, stoppingToken);
-            for (int i = 0; i < 10; i++)
-            {
-                await eventBus.ScheduleAsync(new TestScheduledEvent(++_currentId), DateTimeOffset.UtcNow.AddSeconds(4), stoppingToken);
-            }
+            await eventBus.BulkScheduleAsync([
+                new TestScheduledEvent(++_currentId),
+                new TestScheduledEvent(++_currentId)
+            ],
+            DateTimeOffset.UtcNow.AddSeconds(4),
+            stoppingToken);
         }
     }
 }
