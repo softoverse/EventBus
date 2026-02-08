@@ -72,21 +72,40 @@ public class ScheduledEventProcessingHostedService(
         // Process events respecting the EventProcessorCapacity
         var processingTasks = new List<Task>();
 
-        //await using var scope = scopeFactory.CreateAsyncScope();
-        //var eventBus = scope.ServiceProvider.GetRequiredService<IEventBus>();
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var eventBus = scope.ServiceProvider.GetRequiredService<IEventBus>();
 
         foreach (var scheduledEvent in dueEvents)
         {
-            // Wait for available capacity
-            await _semaphore.WaitAsync(cancellationToken);
+            try
+            {
+                logger.LogInformation(
+                      "[ScheduledEventProcessingHostedService] Processing scheduled event {EventId} of type {EventType}",
+                      scheduledEvent.Id,
+                      scheduledEvent.Event.GetType().Name);
 
-            //var task = eventBus.PublishAsync(scheduledEvent.Event).AsTask();
-            var task = ProcessScheduledEventAsync(scheduledEvent, cancellationToken);
-            processingTasks.Add(task);
+                await eventBus.PublishAsync(scheduledEvent.Event);
+
+                // Remove the event from the store after successful processing
+                scheduledEventStore.RemoveScheduledEvent(scheduledEvent.Id);
+
+                logger.LogInformation(
+                                      "[ScheduledEventProcessingHostedService] Successfully processed and removed event {EventId}",
+                                      scheduledEvent.Id);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(
+                                ex,
+                                "[ScheduledEventProcessingHostedService] Failed to process scheduled event {EventId} of type {EventType}",
+                                scheduledEvent.Id,
+                                scheduledEvent.Event.GetType().Name);
+
+                // Optionally remove the event even on failure to prevent infinite retries
+                // For now, we'll remove it to prevent the same event from being processed repeatedly
+                //scheduledEventStore.RemoveScheduledEvent(scheduledEvent.Id);
+            }
         }
-
-        // Wait for all events to be processed
-        await Task.WhenAll(processingTasks);
     }
 
     private async Task ProcessScheduledEventAsync(ScheduledEventEntry scheduledEvent, CancellationToken cancellationToken)
