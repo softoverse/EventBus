@@ -36,6 +36,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI(options =>
     {
         options.EnableTryItOutByDefault();
+        options.DisplayRequestDuration();
     });
 }
 

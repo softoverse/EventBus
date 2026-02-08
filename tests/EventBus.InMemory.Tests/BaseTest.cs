@@ -63,7 +63,7 @@ public abstract class BaseTest(string configFileName, bool useDefaultEventProces
 
     private async Task WaitForProcessingAsync(int count = 0)
     {
-        int delayMs = (_delayMilliseconds * Math.Abs(count)) + 1000; // Add extra time to ensure processing is complete
+        int delayMs = (_delayMilliseconds * Math.Abs(count)) + 100; // Add extra time to ensure processing is complete
         // Wait for a reasonable time to allow events to be processed
         await Task.Delay(delayMs);
     }
@@ -175,7 +175,7 @@ public abstract class BaseTest(string configFileName, bool useDefaultEventProces
         await WaitForProcessingAsync(events.Length);
 
         // Assert - Check that events were scheduled
-        Assert.True(_eventTracker.ScheduledEvents.Count >= 1, $"Expected at least 1 scheduled event, but got {_eventTracker.ScheduledEvents.Count}");
+        Assert.True(!_eventTracker.ScheduledEvents.IsEmpty, $"Expected at least 1 scheduled event, but got {_eventTracker.ScheduledEvents.Count}");
         Assert.True(_eventTracker.ScheduledEvents.Contains(5) || _eventTracker.ScheduledEvents.Contains(6), "Expected to find event 5 or 6 in scheduled events");
     }
 }
