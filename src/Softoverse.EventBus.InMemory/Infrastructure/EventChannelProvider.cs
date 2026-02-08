@@ -1,8 +1,9 @@
 using System.Threading.Channels;
+
 using Softoverse.EventBus.InMemory.Abstractions;
 using Softoverse.EventBus.InMemory.Models.Settings;
 
-namespace Softoverse.EventBus.InMemory.Infrastructure.Channels;
+namespace Softoverse.EventBus.InMemory.Infrastructure;
 
 public sealed class EventChannelProvider
 {

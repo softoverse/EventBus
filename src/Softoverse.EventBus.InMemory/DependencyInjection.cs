@@ -1,10 +1,11 @@
 using System.Reflection;
+
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+
 using Softoverse.EventBus.InMemory.Abstractions;
-using Softoverse.EventBus.InMemory.Infrastructure.Channels;
-using Softoverse.EventBus.InMemory.Infrastructure.General;
-using Softoverse.EventBus.InMemory.Infrastructure.Processors;
+using Softoverse.EventBus.InMemory.Infrastructure;
+using Softoverse.EventBus.InMemory.Infrastructure.Services;
 using Softoverse.EventBus.InMemory.Models.Settings;
 
 namespace Softoverse.EventBus.InMemory;
@@ -17,23 +18,15 @@ public static class DependencyInjection
         where TEventProcessor : class, IEventProcessor
     {        
         UsingDefaultEventProcessor = false;
-        string eventBusType = configuration[BuildConstants.EventBusTypeConfigPath] ?? BuildConstants.Channel;
 
         services.AddEventBusSettings(configuration);
         services.AddScoped<IEventProcessor, TEventProcessor>();
 
-        if (string.Equals(eventBusType, BuildConstants.Channel, StringComparison.OrdinalIgnoreCase))
-        {
-            services.AddHostedService<ChannelEventsPublishingHostedService>();
-            services.AddHostedService<ChannelEventsSchedulingHostedService>();
-            services.AddSingleton<EventChannelProvider>();
-            services.AddScoped<ChannelEventBus>();
-            services.AddScoped<IEventBus>(sp => sp.GetRequiredService<ChannelEventBus>());
-        }
-        else
-        {
-            services.AddScoped<IEventBus, GeneralEventBus>();
-        }
+        services.AddHostedService<ChannelEventsPublishingHostedService>();
+        services.AddHostedService<ChannelEventsSchedulingHostedService>();
+        services.AddSingleton<EventChannelProvider>();
+        services.AddScoped<ChannelEventBus>();
+        services.AddScoped<IEventBus>(sp => sp.GetRequiredService<ChannelEventBus>());
 
         // Register all IEventHandler<T> implementations from application assemblies
         RegisterHandlersFromAssembly(services, assemblies);

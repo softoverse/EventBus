@@ -106,7 +106,7 @@ src/
     Abstractions/        # Interfaces and abstract classes
     Infrastructure/      # Implementation classes
       Channels/          # Channel-based implementation
-      General/           # General implementation
+      Processors/        # Event processor implementations
     Models/              # Data models
       EventDispatch/     # Event dispatch models
       Settings/          # Configuration models

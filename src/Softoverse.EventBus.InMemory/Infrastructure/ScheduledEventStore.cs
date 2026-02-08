@@ -1,8 +1,10 @@
 ﻿using System.Collections.Concurrent;
+
 using Microsoft.Extensions.Logging;
+
 using Softoverse.EventBus.InMemory.Abstractions;
 
-namespace Softoverse.EventBus.InMemory.Infrastructure.Processors;
+namespace Softoverse.EventBus.InMemory.Infrastructure;
 
 /// <summary>
 /// Thread-safe in-memory store for scheduled events.

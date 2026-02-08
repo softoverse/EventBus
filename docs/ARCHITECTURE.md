@@ -39,14 +39,14 @@ This documentation is intended for:
               │    (Abstraction Layer)       │
               └──────────────┬───────────────┘
                              │
-                    ┌────────┴────────┐
-                    │                 │
-         ┌──────────▼─────────┐  ┌────▼─────────────┐
-         │  ChannelEventBus   │  │ GeneralEventBus  │
-         │  (Async/Channel)   │  │  (Sync/Direct)   │
-         └──────────┬─────────┘  └───┬──────────────┘
-                    │                │
-                    ▼                ▼
+                             │
+                             │
+               ┌──────────────▼──────────────┐
+               │     ChannelEventBus         │
+               │     (Async/Channel)         │
+               └──────────────┬──────────────┘
+                             │
+                             ▼
          ┌──────────────────────────────────┐
          │       IEventProcessor            │
          │  (Processing Coordination)       │
@@ -96,11 +96,7 @@ public abstract class EventBase : IEvent
 - Separate methods for single/bulk publishing (optimization opportunity)
 - `InvokeAsync<TResult>` for request-response pattern (separate from fire-and-forget)
 
-**Implementations**:
-
-#### ChannelEventBus (Recommended)
-
-Uses `System.Threading.Channels` for high-throughput async processing.
+**Implementation**: The library uses `ChannelEventBus` which leverages `System.Threading.Channels` for high-throughput async processing.
 
 **Flow**:
 ```
@@ -154,24 +150,6 @@ new BoundedChannelOptions(capacity)
     SingleWriter = false,
     AllowSynchronousContinuations = true
 }
-```
-
-#### GeneralEventBus
-
-Direct synchronous processing without channels.
-
-**Flow**:
-```
-Publisher
-   │
-   ▼
-PublishAsync() ────► IEventProcessor.ProcessEventAsync()
-   │                      │
-   │                      ▼
-   │              [Handler Resolution & Execution]
-   │                      │
-   │                      ▼
-   └─────────────────► Returns after processing
 ```
 
 ### 3. IEventHandler<TEvent>
@@ -498,7 +476,7 @@ private async Task ProcessDueEventsAsync(CancellationToken ct)
 
 ## Concurrency Model
 
-### Channel Mode
+The EventBus uses a channel-based concurrency model with multiple levels of concurrent processing.
 
 **Concurrency Levels**:
 
@@ -530,12 +508,16 @@ Total concurrent handlers (both) = 60    // 30 + 30
 - **Better Resource Distribution**: Immediate, channel-scheduled, and in-memory scheduled events don't compete for the same processing slots
 - **Fault Isolation**: A failure in one service doesn't affect the others' processing capacity
 
-### General Mode
+## Concurrency Model
 
-**Concurrency**:
-- Limited by caller's concurrency
-- If multiple threads call `PublishAsync`, multiple events process concurrently
-- No built-in concurrency limits
+The EventBus uses a channel-based concurrency model with multiple levels of concurrent processing.
+
+**Concurrency Levels**:
+
+1. **Channel Writers**: Multiple concurrent publishers (controlled by `SingleWriter = false`)
+2. **Channel Readers**: Multiple concurrent readers (controlled by `SingleReader = false`)
+3. **Event Processors**: Each background service has its own `SemaphoreSlim` for independent concurrency control (configured via `EventProcessorCapacity`)
+4. **Handler Execution**: All applicable handlers run in parallel via `Task.WhenAll()`
 
 ### In-Memory Scheduling (InMemoryEventProcessor)
 
@@ -596,12 +578,12 @@ builder.Services.AddEventBus(
 ```
 
 **Registers**:
-- `IEventBus` (ChannelEventBus or GeneralEventBus based on config)
+- `IEventBus` as `ChannelEventBus`
 - `IEventProcessor` as `InMemoryEventProcessor`
 - `ScheduledEventStore` (Singleton)
 - `ScheduledEventProcessingHostedService` (BackgroundService)
-- `ChannelEventsPublishingHostedService` (if Channel mode)
-- `ChannelEventsSchedulingHostedService` (if Channel mode)
+- `ChannelEventsPublishingHostedService`
+- `ChannelEventsSchedulingHostedService`
 - All `IEventHandler<>` implementations from provided assemblies
 
 #### 2. With Custom Event Processor
@@ -614,10 +596,10 @@ builder.Services.AddEventBus<CustomEventProcessor>(
 ```
 
 **Registers**:
-- `IEventBus` (ChannelEventBus or GeneralEventBus based on config)
+- `IEventBus` as `ChannelEventBus`
 - `IEventProcessor` as `CustomEventProcessor`
-- `ChannelEventsPublishingHostedService` (if Channel mode)
-- `ChannelEventsSchedulingHostedService` (if Channel mode)
+- `ChannelEventsPublishingHostedService`
+- `ChannelEventsSchedulingHostedService`
 - All `IEventHandler<>` implementations from provided assemblies
 
 **Note**: `ScheduledEventProcessingHostedService` is **not** registered with custom processors. If you need in-memory scheduling with a custom processor, register it manually:
@@ -781,8 +763,7 @@ await Task.WhenAll(tasks);
 
 ### Error Propagation
 
-**Channel Mode**: Errors logged, event processing continues
-**General Mode**: Errors logged, exception can be caught by publisher
+Errors are logged and event processing continues. Individual handler failures are isolated and don't affect other handlers or subsequent events.
 
 ### Retry Strategies
 
@@ -833,7 +814,6 @@ Generated during build via MSBuild:
         {
             public const string EventBusTypeConfigPath = "$(EventBusTypeConfigPath)";
             public const string Channel = "Channel";
-            public const string General = "General";
         }
     </BuildConstants>
 </PropertyGroup>
@@ -1029,24 +1009,6 @@ public class PersistentScheduledEventStore
 - ❌ Complex setup and configuration
 - ❌ Network latency
 - ❌ Additional infrastructure costs
-
-### Channel vs General Mode
-
-**Channel Mode**:
-- ✅ Non-blocking publishers
-- ✅ High throughput
-- ✅ Background processing
-- ✅ Better for production workloads
-- ❌ Eventual consistency
-- ❌ More complex debugging
-
-**General Mode**:
-- ✅ Immediate processing
-- ✅ Simpler debugging
-- ✅ Synchronous flow
-- ✅ Better for testing
-- ❌ Blocks publisher
-- ❌ Lower throughput
 
 ### InMemoryEventProcessor vs Custom Processor
 

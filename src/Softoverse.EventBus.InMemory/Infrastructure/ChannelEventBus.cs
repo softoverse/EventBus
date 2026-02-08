@@ -1,29 +1,26 @@
 using Microsoft.Extensions.Logging;
+
 using Softoverse.EventBus.InMemory.Abstractions;
 
-namespace Softoverse.EventBus.InMemory.Infrastructure.General;
+namespace Softoverse.EventBus.InMemory.Infrastructure;
 
-public class GeneralEventBus(
+public class ChannelEventBus(
+    EventChannelProvider channelProvider,
     IEventProcessor eventProcessor,
-    ILogger<GeneralEventBus> logger)
+    ILogger<ChannelEventBus> logger)
     : IEventBus
 {
+
     public async ValueTask PublishAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default)
         where TEvent : class, IEvent
     {
         if (@event == null!)
         {
-            logger.LogWarning("[GeneralEventBus] Ignored null event of type {EventType}", typeof(TEvent).Name);
+            logger.LogWarning("[ChannelEventBus] Ignored null event of type {EventType}", typeof(TEvent).Name);
             return;
         }
-        try
-        {
-            await eventProcessor.ProcessEventAsync(@event!, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "[GeneralEventBus] Failed to process event {EventType}", @event?.GetType().Name ?? "null");
-        }
+        logger.LogInformation("[ChannelEventBus] Publishing {EventType}", typeof(TEvent).Name);
+        await channelProvider.PublishingChannel.Writer.WriteAsync(@event!, cancellationToken).ConfigureAwait(false);
     }
 
     public async ValueTask BulkPublishAsync<TEvent>(IEnumerable<TEvent> events, CancellationToken cancellationToken = default)
@@ -38,26 +35,18 @@ public class GeneralEventBus(
         // await Task.WhenAll(publishTasks);
     }
 
-    public async ValueTask ScheduleAsync<TEvent>(TEvent @event, DateTimeOffset scheduleTime, CancellationToken cancellationToken = default)
-        where TEvent : class, IEvent
+    public async ValueTask ScheduleAsync<TEvent>(TEvent @event, DateTimeOffset scheduleTime, CancellationToken cancellationToken = default) where TEvent : class, IEvent
     {
         if (@event == null!)
         {
-            logger.LogWarning("[GeneralEventBus] Ignored null event of type {EventType}", typeof(TEvent).Name);
+            logger.LogWarning("[ChannelEventBus] Ignored null event of type {EventType}", typeof(TEvent).Name);
             return;
         }
-        try
-        {
-            await eventProcessor.ProcessScheduledEventAsync(@event!, scheduleTime, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "[GeneralEventBus] Failed to process event {EventType}", @event?.GetType().Name ?? "null");
-        }
+        logger.LogInformation("[ChannelEventBus] Scheduling {EventType}", typeof(TEvent).Name);
+        await channelProvider.SchedulingChannel.Writer.WriteAsync((@event!, scheduleTime), cancellationToken).ConfigureAwait(false);
     }
 
-    public async ValueTask BulkScheduleAsync<TEvent>(IEnumerable<TEvent> events, DateTimeOffset scheduleTime, CancellationToken cancellationToken = default)
-        where TEvent : class, IEvent
+    public async ValueTask BulkScheduleAsync<TEvent>(IEnumerable<TEvent> events, DateTimeOffset scheduleTime, CancellationToken cancellationToken = default) where TEvent : class, IEvent
     {
         foreach (var @event in events)
         {
@@ -72,7 +61,7 @@ public class GeneralEventBus(
     {
         if (@event == null!)
         {
-            logger.LogWarning("[GeneralEventBus] Ignored null event of type {EventType}", @event?.GetType().Name);
+            logger.LogWarning("[ChannelEventBus] Ignored null event");
         }
         try
         {
@@ -80,7 +69,7 @@ public class GeneralEventBus(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "[GeneralEventBus] Failed to invoke event {EventType}", @event?.GetType().Name ?? "null");
+            logger.LogError(ex, "[ChannelEventBus] Failed to invoke event {EventType}", @event?.GetType().Name ?? "null");
         }
         return default!;
     }

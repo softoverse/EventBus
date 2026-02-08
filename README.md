@@ -24,7 +24,7 @@ A lightweight, high-performance in-memory event bus for .NET 10+ applications. E
 - 🔄 **Async First**: Non-blocking event publishing and processing
 - 📅 **Event Scheduling**: Schedule events to be processed at specific times
 - 🛡️ **Type-Safe**: Strongly-typed contracts with compile-time safety
-- 🔧 **Flexible**: Two processing modes (Channel/General)
+- 🔧 **Flexible**: Extensible architecture with custom processors
 - 🧵 **Concurrency Control**: Built-in capacity management
 - 📝 **Rich Logging**: Comprehensive logging for monitoring
 - 🧩 **DI Native**: First-class dependency injection support
@@ -96,7 +96,6 @@ app.Run();
 ```json
 {
   "EventBusSettings": {
-    "EventBusType": "Channel",
     "EventProcessorCapacity": 10
   }
 }
@@ -135,7 +134,6 @@ public class OrderService
 
 | Property | Description | Default |
 |----------|-------------|---------|
-| `EventBusType` | Processing mode: "Channel" or "General" | "Channel" |
 | `EventProcessorCapacity` | Max concurrent event processors | 10 |
 | `ChannelCapacity` | Channel buffer size (-1 = unbounded) | -1 |
 | `ExecuteAfterSeconds` | Interval for checking scheduled events | 2 |
@@ -147,7 +145,6 @@ public class OrderService
 ```json
 {
   "EventBusSettings": {
-    "EventBusType": "Channel",
     "EventProcessorCapacity": 10,
     "ChannelCapacity": -1,
     "ExecuteAfterSeconds": 2,
@@ -260,11 +257,9 @@ public class OrderAuditHandler : IEventHandler<OrderCreatedEvent>
 // All three handlers execute in parallel when the event is published
 ```
 
-## 🔄 Processing Modes
+## 🔄 Processing Mode
 
-### Channel Mode (Recommended)
-
-High-performance asynchronous processing with background workers.
+The EventBus uses a Channel-based architecture for high-performance asynchronous processing with background workers.
 
 **Benefits:**
 - Non-blocking publishers (immediate return)
@@ -272,40 +267,10 @@ High-performance asynchronous processing with background workers.
 - Built-in concurrency control
 - Automatic scheduling support
 
-**Use When:**
-- High event volume
-- Performance is critical
-- Eventual consistency is acceptable
-
-```json
-{
-  "EventBusSettings": {
-    "EventBusType": "Channel"
-  }
-}
-```
-
-### General Mode
-
-Synchronous immediate processing.
-
-**Benefits:**
-- Immediate processing
-- Simpler debugging
-- Immediate consistency
-
-**Use When:**
-- Low event volume
-- Immediate consistency required
-- Testing/debugging
-
-```json
-{
-  "EventBusSettings": {
-    "EventBusType": "General"
-  }
-}
-```
+**Characteristics:**
+- High event volume support
+- Optimized for performance
+- Eventual consistency model
 
 ## 🚀 Advanced Scenarios
 

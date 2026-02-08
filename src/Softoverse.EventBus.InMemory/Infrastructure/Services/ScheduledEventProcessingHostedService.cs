@@ -1,10 +1,11 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+
 using Softoverse.EventBus.InMemory.Abstractions;
 using Softoverse.EventBus.InMemory.Models.Settings;
 
-namespace Softoverse.EventBus.InMemory.Infrastructure.Processors;
+namespace Softoverse.EventBus.InMemory.Infrastructure.Services;
 
 /// <summary>
 /// Background service that periodically checks for scheduled events that are due

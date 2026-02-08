@@ -1,8 +1,9 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+
 using Softoverse.EventBus.InMemory.Abstractions;
 
-namespace Softoverse.EventBus.InMemory.Infrastructure.Processors;
+namespace Softoverse.EventBus.InMemory.Infrastructure;
 
 public class InMemoryEventProcessor(
     IServiceScopeFactory scopeFactory,

@@ -1,47 +1,48 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+
 using Softoverse.EventBus.InMemory.Abstractions;
 using Softoverse.EventBus.InMemory.Models.Settings;
 
-namespace Softoverse.EventBus.InMemory.Infrastructure.Channels;
+namespace Softoverse.EventBus.InMemory.Infrastructure.Services;
 
-public class ChannelEventsPublishingHostedService(
+public class ChannelEventsSchedulingHostedService(
     IServiceScopeFactory scopeFactory,
     EventBusSettings eventBusSettings,
     EventChannelProvider channelProvider,
-    ILogger<ChannelEventsPublishingHostedService> logger)
+    ILogger<ChannelEventsSchedulingHostedService> logger)
     : BackgroundService
 {
     private readonly SemaphoreSlim _semaphore = new SemaphoreSlim(eventBusSettings.EventProcessorCapacity, eventBusSettings.EventProcessorCapacity);
 
     protected async override Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        logger.LogInformation("ChannelEventsPublishingHostedService started.");
+        logger.LogInformation("ChannelEventsSchedulingHostedService started.");
         using var scope = scopeFactory.CreateScope();
         var eventProcessor = scope.ServiceProvider.GetRequiredService<IEventProcessor>();
-        var reader = channelProvider.PublishingChannel.Reader;
+        var reader = channelProvider.SchedulingChannel.Reader;
         while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
-                var @event = await reader.ReadAsync(cancellationToken);
+                var scheduledEvent = await reader.ReadAsync(cancellationToken);
 
                 try
                 {
                     await _semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-                    await eventProcessor.ProcessEventAsync(@event, cancellationToken).ConfigureAwait(false);
+                    await eventProcessor.ProcessScheduledEventAsync(scheduledEvent.Event, scheduledEvent.ScheduledTime, cancellationToken).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "[ChannelEventsPublishingHostedService] Failed to publish event {EventType}", @event?.GetType().Name ?? "null");
+                    logger.LogError(ex, "[ChannelEventsSchedulingHostedService] Failed to publish event {EventType}", scheduledEvent.Event?.GetType().Name ?? "null");
                 }
                 finally
                 {
                     _semaphore.Release();
                 }
 
-                logger.LogInformation("[ChannelEventsPublishingHostedService] Received event of type {EventType}", @event?.GetType().Name);
+                logger.LogInformation("[ChannelEventsSchedulingHostedService] Received event of type {EventType}", scheduledEvent.Event?.GetType().Name);
             }
             catch (OperationCanceledException)
             {
@@ -52,6 +53,6 @@ public class ChannelEventsPublishingHostedService(
                 logger.LogError(ex, "Error while processing event from channel.");
             }
         }
-        logger.LogInformation("ChannelEventsPublishingHostedService stopped.");
+        logger.LogInformation("ChannelEventsSchedulingHostedService stopped.");
     }
 }
