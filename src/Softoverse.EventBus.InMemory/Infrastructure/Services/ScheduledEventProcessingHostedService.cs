@@ -91,7 +91,7 @@ internal class ScheduledEventProcessingHostedService(
                       scheduledEvent.Id,
                       scheduledEvent.Event.GetType().Name);
 
-                await eventBus.PublishAsync(scheduledEvent.Event);
+                await eventBus.PublishAsync(scheduledEvent.Event, cancellationToken);
 
                 // Mark as done and remove from store after successful processing
                 scheduledEventStore.MarkAsDone(scheduledEvent.Id);
@@ -115,69 +115,6 @@ internal class ScheduledEventProcessingHostedService(
                 // Remove the event to prevent infinite retries
                 scheduledEventStore.RemoveScheduledEvent(scheduledEvent.Id);
             }
-        }
-    }
-
-    private async Task ProcessScheduledEventAsync(ScheduledEventEntry scheduledEvent, CancellationToken cancellationToken)
-    {
-        try
-        {
-            // Mark as in progress immediately to prevent duplicate execution
-            if (!scheduledEventStore.MarkAsInProgress(scheduledEvent.Id))
-            {
-                logger.LogWarning(
-                    "[ScheduledEventProcessingHostedService] Failed to mark event {EventId} as InProgress, aborting",
-                    scheduledEvent.Id);
-                return;
-            }
-            
-            await using var scope = scopeFactory.CreateAsyncScope();
-            var eventProcessor = scope.ServiceProvider.GetRequiredService<IEventProcessor>();
-
-            logger.LogInformation(
-                                  "[ScheduledEventProcessingHostedService] Processing scheduled event {EventId} of type {EventType}",
-                                  scheduledEvent.Id,
-                                  scheduledEvent.Event.GetType().Name);
-
-            var delay = scheduledEvent.ScheduledTime - DateTimeOffset.UtcNow;
-            if (delay > TimeSpan.Zero && delay < TimeSpan.FromMinutes(1))
-            {
-                // If the event is slightly in the future (within 1 minute), wait for it
-                logger.LogDebug(
-                                "[ScheduledEventProcessingHostedService] Waiting {Delay}ms for event {EventId}",
-                                delay.TotalMilliseconds,
-                                scheduledEvent.Id);
-                await Task.Delay(delay, cancellationToken);
-            }
-
-            // Process the event handlers
-            await eventProcessor.ProcessEventHandlersAsync(scheduledEvent.Event, cancellationToken);
-
-            // Mark as done and remove from store after successful processing
-            scheduledEventStore.MarkAsDone(scheduledEvent.Id);
-            scheduledEventStore.RemoveScheduledEvent(scheduledEvent.Id);
-
-            logger.LogInformation(
-                                  "[ScheduledEventProcessingHostedService] Successfully processed and removed event {EventId}",
-                                  scheduledEvent.Id);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(
-                            ex,
-                            "[ScheduledEventProcessingHostedService] Failed to process scheduled event {EventId} of type {EventType}",
-                            scheduledEvent.Id,
-                            scheduledEvent.Event.GetType().Name);
-
-            // Mark as failed with the error message
-            scheduledEventStore.MarkAsFailed(scheduledEvent.Id, ex.Message);
-            
-            // Remove the event to prevent infinite retries
-            scheduledEventStore.RemoveScheduledEvent(scheduledEvent.Id);
-        }
-        finally
-        {
-            _semaphore.Release();
         }
     }
 
