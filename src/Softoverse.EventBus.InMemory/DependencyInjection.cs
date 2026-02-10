@@ -12,7 +12,7 @@ namespace Softoverse.EventBus.InMemory;
 
 public static class DependencyInjection
 {
-    public static bool UsingDefaultEventProcessor = false;
+    internal static bool UsingDefaultEventProcessor = false;
     
     public static IServiceCollection AddEventBus<TEventProcessor>(this IServiceCollection services, IConfiguration configuration, params List<Assembly> assemblies)
         where TEventProcessor : class, IEventProcessor
