@@ -1,7 +1,4 @@
 ﻿namespace EventBus.InMemory.Tests;
 
 public class InMemoryEventProcessorTest()
-    : BaseTest(configFileName: "appSettings.Channel.json",
-               useDefaultEventProcessor: true)
-{
-}
+    : BaseTest(configFileName: "appSettings.json", useDefaultEventProcessor: true);
