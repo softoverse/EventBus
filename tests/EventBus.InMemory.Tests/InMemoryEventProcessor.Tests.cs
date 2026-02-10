@@ -1,4 +1,5 @@
-﻿namespace EventBus.InMemory.Tests;
+﻿using EventBus.InMemory.Tests.Core;
 
-public class InMemoryEventProcessorTest()
-    : BaseTest(configFileName: "appSettings.json", useDefaultEventProcessor: true);
+namespace EventBus.InMemory.Tests;
+
+public class InMemoryEventProcessorTest() : BaseTests(useDefaultEventProcessor: true);

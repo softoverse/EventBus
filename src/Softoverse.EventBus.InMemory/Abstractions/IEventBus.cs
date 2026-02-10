@@ -41,7 +41,13 @@ public interface IEventBus
     /// <param name="cancellationToken">Cancellation token.</param>
     ValueTask BulkScheduleAsync<TEvent>(IEnumerable<TEvent> events, DateTimeOffset scheduleTime, CancellationToken cancellationToken = default)
         where TEvent : class, IEvent;
-    
-    // Wait for the response
+
+    /// <summary>
+    /// Invokes a request handler for the given event and returns the result.
+    /// </summary>
+    /// <param name="event">The type to execute as request</param>
+    /// <param name="cancellationToken"></param>
+    /// <typeparam name="TResult">Can be of any type</typeparam>
+    /// <returns></returns>
     ValueTask<TResult> InvokeAsync<TResult>(object @event, CancellationToken cancellationToken = default);
 }
