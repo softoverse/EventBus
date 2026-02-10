@@ -70,14 +70,20 @@ internal class ScheduledEventProcessingHostedService(
                               "[ScheduledEventProcessingHostedService] Found {Count} due event(s) to process",
                               dueEvents.Count);
 
-        // Process events respecting the EventProcessorCapacity
-        var processingTasks = new List<Task>();
-
         await using var scope = scopeFactory.CreateAsyncScope();
         var eventBus = scope.ServiceProvider.GetRequiredService<IEventBus>();
 
         foreach (var scheduledEvent in dueEvents)
         {
+            // Mark as in progress immediately to prevent duplicate execution
+            if (!scheduledEventStore.MarkAsInProgress(scheduledEvent.Id))
+            {
+                logger.LogWarning(
+                    "[ScheduledEventProcessingHostedService] Failed to mark event {EventId} as InProgress, skipping",
+                    scheduledEvent.Id);
+                continue;
+            }
+            
             try
             {
                 logger.LogInformation(
@@ -87,7 +93,8 @@ internal class ScheduledEventProcessingHostedService(
 
                 await eventBus.PublishAsync(scheduledEvent.Event);
 
-                // Remove the event from the store after successful processing
+                // Mark as done and remove from store after successful processing
+                scheduledEventStore.MarkAsDone(scheduledEvent.Id);
                 scheduledEventStore.RemoveScheduledEvent(scheduledEvent.Id);
 
                 logger.LogInformation(
@@ -102,9 +109,11 @@ internal class ScheduledEventProcessingHostedService(
                                 scheduledEvent.Id,
                                 scheduledEvent.Event.GetType().Name);
 
-                // Optionally remove the event even on failure to prevent infinite retries
-                // For now, we'll remove it to prevent the same event from being processed repeatedly
-                //scheduledEventStore.RemoveScheduledEvent(scheduledEvent.Id);
+                // Mark as failed with the error message
+                scheduledEventStore.MarkAsFailed(scheduledEvent.Id, ex.Message);
+                
+                // Remove the event to prevent infinite retries
+                scheduledEventStore.RemoveScheduledEvent(scheduledEvent.Id);
             }
         }
     }
@@ -113,6 +122,15 @@ internal class ScheduledEventProcessingHostedService(
     {
         try
         {
+            // Mark as in progress immediately to prevent duplicate execution
+            if (!scheduledEventStore.MarkAsInProgress(scheduledEvent.Id))
+            {
+                logger.LogWarning(
+                    "[ScheduledEventProcessingHostedService] Failed to mark event {EventId} as InProgress, aborting",
+                    scheduledEvent.Id);
+                return;
+            }
+            
             await using var scope = scopeFactory.CreateAsyncScope();
             var eventProcessor = scope.ServiceProvider.GetRequiredService<IEventProcessor>();
 
@@ -135,7 +153,8 @@ internal class ScheduledEventProcessingHostedService(
             // Process the event handlers
             await eventProcessor.ProcessEventHandlersAsync(scheduledEvent.Event, cancellationToken);
 
-            // Remove the event from the store after successful processing
+            // Mark as done and remove from store after successful processing
+            scheduledEventStore.MarkAsDone(scheduledEvent.Id);
             scheduledEventStore.RemoveScheduledEvent(scheduledEvent.Id);
 
             logger.LogInformation(
@@ -150,8 +169,10 @@ internal class ScheduledEventProcessingHostedService(
                             scheduledEvent.Id,
                             scheduledEvent.Event.GetType().Name);
 
-            // Optionally remove the event even on failure to prevent infinite retries
-            // For now, we'll remove it to prevent the same event from being processed repeatedly
+            // Mark as failed with the error message
+            scheduledEventStore.MarkAsFailed(scheduledEvent.Id, ex.Message);
+            
+            // Remove the event to prevent infinite retries
             scheduledEventStore.RemoveScheduledEvent(scheduledEvent.Id);
         }
         finally

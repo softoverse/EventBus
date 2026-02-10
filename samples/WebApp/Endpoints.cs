@@ -52,7 +52,7 @@ public static class Endpoints
     {
         await eventBus.BulkScheduleAsync([
                                              new TestScheduledEvent(1),
-                                             new TestScheduledEvent(1)
+                                             new TestScheduledEvent(2)
                                          ],
                                          DateTimeOffset.UtcNow.AddSeconds(10),
                                          ct);

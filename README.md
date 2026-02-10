@@ -202,6 +202,123 @@ var scheduleTime = DateTimeOffset.UtcNow.AddDays(7);
 await _eventBus.BulkScheduleAsync(reminders, scheduleTime);
 ```
 
+### Scheduled Event Status Tracking
+
+The EventBus includes comprehensive status tracking for scheduled events to prevent duplicate execution and provide visibility into event processing:
+
+#### Status Types
+
+- **Pending**: Event is waiting to be processed
+- **InProgress**: Event is currently being processed
+- **Done**: Event completed successfully
+- **Failed**: Event processing failed (with failure reason)
+- **Skipped**: Event was skipped and won't be processed
+
+#### Automatic Status Management
+
+The system automatically manages event statuses to prevent duplicate execution:
+
+1. When an event becomes due, it's immediately marked as **InProgress**
+2. If processing succeeds, it's marked as **Done** and removed from the store
+3. If processing fails, it's marked as **Failed** with the error message and removed
+4. Events stuck in **InProgress** for too long (default: 5 minutes) are considered stale and can be retried
+
+#### Configuring InProgress Timeout
+
+You can control how long an event stays in InProgress state before being considered stale:
+
+```csharp
+// In your startup/configuration
+builder.Services.AddSingleton<ScheduledEventStore>(sp =>
+{
+    var logger = sp.GetRequiredService<ILogger<ScheduledEventStore>>();
+    var store = new ScheduledEventStore(logger)
+    {
+        InProgressTimeoutMinutes = 10  // Default is 5 minutes
+    };
+    return store;
+});
+```
+
+#### Querying Event Status
+
+You can query events by status for monitoring or debugging:
+
+```csharp
+// Get the ScheduledEventStore from DI
+var store = serviceProvider.GetRequiredService<ScheduledEventStore>();
+
+// Get all pending events
+var pendingEvents = store.GetEventsByStatus(ScheduledEventStatus.Pending);
+
+// Get all failed events to investigate issues
+var failedEvents = store.GetEventsByStatus(ScheduledEventStatus.Failed);
+foreach (var entry in failedEvents)
+{
+    Console.WriteLine($"Event {entry.Id} failed: {entry.Remarks}");
+}
+
+// Get all in-progress events
+var inProgressEvents = store.GetEventsByStatus(ScheduledEventStatus.InProgress);
+
+// Manually mark an event as skipped
+store.MarkAsSkipped(eventId, "Cancelled by user");
+
+// Get total count of scheduled events
+int totalEvents = store.Count;
+
+// Get next scheduled event time
+DateTimeOffset? nextEventTime = store.GetNextScheduledTime();
+```
+
+#### Why Status Tracking Matters
+
+**Problem**: When debugging handlers (e.g., using breakpoints), the background service continues polling and may pick up the same event multiple times, causing duplicate execution.
+
+**Solution**: Status tracking ensures:
+- Events marked as **InProgress** won't be picked up again (unless they time out)
+- Failed events are tracked with failure reasons for troubleshooting
+- You can query and monitor the state of all scheduled events
+- Prevents race conditions in distributed scenarios
+
+#### Example: Monitoring Scheduled Events
+
+```csharp
+public class ScheduledEventMonitor : BackgroundService
+{
+    private readonly ScheduledEventStore _store;
+    private readonly ILogger<ScheduledEventMonitor> _logger;
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            var pending = _store.GetEventsByStatus(ScheduledEventStatus.Pending);
+            var inProgress = _store.GetEventsByStatus(ScheduledEventStatus.InProgress);
+            var failed = _store.GetEventsByStatus(ScheduledEventStatus.Failed);
+
+            _logger.LogInformation(
+                "Scheduled Events - Pending: {Pending}, InProgress: {InProgress}, Failed: {Failed}",
+                pending.Count, inProgress.Count, failed.Count);
+
+            // Alert if events are stuck in InProgress for too long
+            foreach (var evt in inProgress)
+            {
+                var stuckDuration = DateTimeOffset.UtcNow - evt.StatusUpdatedAt;
+                if (stuckDuration > TimeSpan.FromMinutes(15))
+                {
+                    _logger.LogWarning(
+                        "Event {EventId} has been InProgress for {Duration} minutes",
+                        evt.Id, stuckDuration.TotalMinutes);
+                }
+            }
+
+            await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
+        }
+    }
+}
+```
+
 ### Request-Response Pattern
 
 For queries that need responses:
@@ -572,6 +689,13 @@ public async Task HandleAsync(OrderCreatedEvent @event, CancellationToken ct)
 1. **Verify InMemoryEventProcessor**: Use the parameterless `AddEventBus()` overload
 2. **Check Time**: Ensure scheduled time is in the future
 3. **Review Logs**: Check `ScheduledEventProcessingHostedService` logs
+4. **Check Status**: Query `ScheduledEventStore.GetEventsByStatus()` to see if events are stuck in InProgress or Failed state
+
+### Events Executing Multiple Times
+
+1. **Status Tracking**: The system automatically marks events as InProgress to prevent duplicate execution
+2. **Timeout Configuration**: If events take longer to process, increase `InProgressTimeoutMinutes` on `ScheduledEventStore`
+3. **Check for Errors**: Review failed events using `GetEventsByStatus(ScheduledEventStatus.Failed)` to identify issues
 
 ### Performance Issues
 
