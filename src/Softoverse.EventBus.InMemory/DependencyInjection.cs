@@ -22,8 +22,8 @@ public static class DependencyInjection
         services.AddEventBusSettings(configuration);
         services.AddScoped<IEventProcessor, TEventProcessor>();
 
-        services.AddHostedService<ChannelEventsPublishingHostedService>();
-        services.AddHostedService<ChannelEventsSchedulingHostedService>();
+        services.AddHostedService<EventPublishingHostedService>();
+        services.AddHostedService<EventSchedulingHostedService>();
         services.AddSingleton<EventChannelProvider>();
         services.AddScoped<ChannelEventBus>();
         services.AddScoped<IEventBus>(sp => sp.GetRequiredService<ChannelEventBus>());
