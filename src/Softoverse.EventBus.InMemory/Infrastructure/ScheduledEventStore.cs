@@ -1,7 +1,5 @@
 ﻿using System.Collections.Concurrent;
-
 using Microsoft.Extensions.Logging;
-
 using Softoverse.EventBus.InMemory.Abstractions;
 
 namespace Softoverse.EventBus.InMemory.Infrastructure;
@@ -15,22 +13,22 @@ public enum ScheduledEventStatus
     /// Event is pending and waiting to be processed.
     /// </summary>
     Pending,
-    
+
     /// <summary>
     /// Event is currently being processed.
     /// </summary>
     InProgress,
-    
+
     /// <summary>
     /// Event has been successfully processed.
     /// </summary>
     Done,
-    
+
     /// <summary>
     /// Event processing failed.
     /// </summary>
     Failed,
-    
+
     /// <summary>
     /// Event was skipped and will not be processed.
     /// </summary>
@@ -44,7 +42,7 @@ public enum ScheduledEventStatus
 public class ScheduledEventStore(ILogger<ScheduledEventStore> logger)
 {
     private readonly ConcurrentDictionary<Guid, ScheduledEventEntry> _scheduledEvents = new();
-    
+
     /// <summary>
     /// Maximum time an event can stay in InProgress state before being considered stale (in minutes).
     /// Default is 5 minutes. After this timeout, the event can be retried.
@@ -73,16 +71,16 @@ public class ScheduledEventStore(ILogger<ScheduledEventStore> logger)
         if (_scheduledEvents.TryAdd(id, entry))
         {
             logger.LogDebug(
-                "[ScheduledEventStore] Added scheduled event {EventId} of type {EventType} for {ScheduledTime}",
-                id,
-                @event.GetType().Name,
-                scheduledTime);
+                            "[ScheduledEventStore] Added scheduled event {EventId} of type {EventType} for {ScheduledTime}",
+                            id,
+                            @event.GetType().Name,
+                            scheduledTime);
             return id;
         }
 
         logger.LogWarning(
-            "[ScheduledEventStore] Failed to add scheduled event {EventId} (duplicate ID)",
-            id);
+                          "[ScheduledEventStore] Failed to add scheduled event {EventId} (duplicate ID)",
+                          id);
         throw new InvalidOperationException($"Failed to add scheduled event with ID {id}");
     }
 
@@ -95,15 +93,15 @@ public class ScheduledEventStore(ILogger<ScheduledEventStore> logger)
     {
         var now = DateTimeOffset.UtcNow;
         var inProgressTimeout = TimeSpan.FromMinutes(InProgressTimeoutMinutes);
-        
+
         return _scheduledEvents.Values
-            .Where(e => e.ScheduledTime <= now && 
-                       (e.Status == ScheduledEventStatus.Pending ||
-                        (e.Status == ScheduledEventStatus.InProgress && 
-                         now - e.StatusUpdatedAt > inProgressTimeout)))
-            .OrderBy(e => e.ScheduledTime)
-            .ToList()
-            .AsReadOnly();
+                               .Where(e => e.ScheduledTime <= now &&
+                                           (e.Status == ScheduledEventStatus.Pending ||
+                                            (e.Status == ScheduledEventStatus.InProgress &&
+                                             now - e.StatusUpdatedAt > inProgressTimeout)))
+                               .OrderBy(e => e.ScheduledTime)
+                               .ToList()
+                               .AsReadOnly();
     }
 
     /// <summary>
@@ -116,18 +114,18 @@ public class ScheduledEventStore(ILogger<ScheduledEventStore> logger)
         if (_scheduledEvents.TryRemove(eventId, out var entry))
         {
             logger.LogDebug(
-                "[ScheduledEventStore] Removed scheduled event {EventId} of type {EventType}",
-                eventId,
-                entry.Event.GetType().Name);
+                            "[ScheduledEventStore] Removed scheduled event {EventId} of type {EventType}",
+                            eventId,
+                            entry.Event.GetType().Name);
             return true;
         }
 
         logger.LogWarning(
-            "[ScheduledEventStore] Failed to remove scheduled event {EventId} (not found)",
-            eventId);
+                          "[ScheduledEventStore] Failed to remove scheduled event {EventId} (not found)",
+                          eventId);
         return false;
     }
-    
+
     /// <summary>
     /// Updates the status of a scheduled event.
     /// </summary>
@@ -140,8 +138,8 @@ public class ScheduledEventStore(ILogger<ScheduledEventStore> logger)
         if (!_scheduledEvents.TryGetValue(eventId, out var entry))
         {
             logger.LogWarning(
-                "[ScheduledEventStore] Failed to update status for event {EventId} (not found)",
-                eventId);
+                              "[ScheduledEventStore] Failed to update status for event {EventId} (not found)",
+                              eventId);
             return false;
         }
 
@@ -151,14 +149,14 @@ public class ScheduledEventStore(ILogger<ScheduledEventStore> logger)
         entry.Remarks = remarks;
 
         logger.LogDebug(
-            "[ScheduledEventStore] Updated event {EventId} status from {OldStatus} to {NewStatus}",
-            eventId,
-            oldStatus,
-            status);
+                        "[ScheduledEventStore] Updated event {EventId} status from {OldStatus} to {NewStatus}",
+                        eventId,
+                        oldStatus,
+                        status);
 
         return true;
     }
-    
+
     /// <summary>
     /// Marks a scheduled event as in progress.
     /// </summary>
@@ -168,7 +166,7 @@ public class ScheduledEventStore(ILogger<ScheduledEventStore> logger)
     {
         return UpdateEventStatus(eventId, ScheduledEventStatus.InProgress, "Processing started");
     }
-    
+
     /// <summary>
     /// Marks a scheduled event as completed successfully.
     /// </summary>
@@ -179,7 +177,7 @@ public class ScheduledEventStore(ILogger<ScheduledEventStore> logger)
     {
         return UpdateEventStatus(eventId, ScheduledEventStatus.Done, remarks ?? "Processing completed successfully");
     }
-    
+
     /// <summary>
     /// Marks a scheduled event as failed.
     /// </summary>
@@ -190,7 +188,7 @@ public class ScheduledEventStore(ILogger<ScheduledEventStore> logger)
     {
         return UpdateEventStatus(eventId, ScheduledEventStatus.Failed, failureReason);
     }
-    
+
     /// <summary>
     /// Marks a scheduled event as skipped.
     /// </summary>
@@ -201,7 +199,7 @@ public class ScheduledEventStore(ILogger<ScheduledEventStore> logger)
     {
         return UpdateEventStatus(eventId, ScheduledEventStatus.Skipped, remarks ?? "Event skipped");
     }
-    
+
     /// <summary>
     /// Gets all events with a specific status.
     /// </summary>
@@ -210,10 +208,10 @@ public class ScheduledEventStore(ILogger<ScheduledEventStore> logger)
     public IReadOnlyCollection<ScheduledEventEntry> GetEventsByStatus(ScheduledEventStatus status)
     {
         return _scheduledEvents.Values
-            .Where(e => e.Status == status)
-            .OrderBy(e => e.ScheduledTime)
-            .ToList()
-            .AsReadOnly();
+                               .Where(e => e.Status == status)
+                               .OrderBy(e => e.ScheduledTime)
+                               .ToList()
+                               .AsReadOnly();
     }
 
     /// <summary>
@@ -230,8 +228,8 @@ public class ScheduledEventStore(ILogger<ScheduledEventStore> logger)
             return null;
 
         return _scheduledEvents.Values
-            .OrderBy(e => e.ScheduledTime)
-            .FirstOrDefault()?.ScheduledTime;
+                               .OrderBy(e => e.ScheduledTime)
+                               .FirstOrDefault()?.ScheduledTime;
     }
 }
 
@@ -244,17 +242,17 @@ public class ScheduledEventEntry
     public required IEvent Event { get; init; }
     public required DateTimeOffset ScheduledTime { get; init; }
     public required DateTimeOffset AddedAt { get; init; }
-    
+
     /// <summary>
     /// The current status of the scheduled event.
     /// </summary>
     public ScheduledEventStatus Status { get; set; }
-    
+
     /// <summary>
     /// The timestamp when the status was last updated.
     /// </summary>
     public DateTimeOffset StatusUpdatedAt { get; set; }
-    
+
     /// <summary>
     /// Optional remarks about the event's status.
     /// For Failed status, this contains the failure reason.
@@ -262,4 +260,3 @@ public class ScheduledEventEntry
     /// </summary>
     public string? Remarks { get; set; }
 }
-

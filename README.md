@@ -16,6 +16,8 @@ A lightweight, high-performance in-memory event bus for .NET 10+ applications. E
 - [Processing Modes](#-processing-modes)
 - [Advanced Scenarios](#-advanced-scenarios)
 - [Best Practices](#-best-practices)
+- [OpenTelemetry Integration](#-opentelemetry-integration)
+- [Troubleshooting](#-troubleshooting)
 - [Contributing](#-contributing)
 
 ## ✨ Features
@@ -674,6 +676,231 @@ public async Task HandleAsync(OrderCreatedEvent @event, CancellationToken ct)
     await ProcessOrderAsync(@event);
     _logger.LogInformation("Order processing completed");
 }
+```
+
+## 📊 OpenTelemetry Integration
+
+The EventBus library includes built-in support for distributed tracing using **OpenTelemetry**. This allows you to trace event publishing, processing, and handler execution in observability platforms like **Seq**, **Jaeger**, **Zipkin**, or **Application Insights**.
+
+### Activity Source
+
+The library exposes an `ActivitySource` named `"Softoverse.EventBus.InMemory"` that creates traces for all event bus operations.
+
+### Quick Setup
+
+#### 1. Install OpenTelemetry Packages
+
+```bash
+# Core OpenTelemetry packages
+dotnet add package OpenTelemetry.Extensions.Hosting
+dotnet add package OpenTelemetry.Instrumentation.AspNetCore
+
+# Choose your exporter (examples below)
+dotnet add package OpenTelemetry.Exporter.Console        # For console output
+dotnet add package OpenTelemetry.Exporter.OpenTelemetryProtocol  # For OTLP (Seq, etc.)
+dotnet add package OpenTelemetry.Exporter.Zipkin         # For Zipkin
+dotnet add package OpenTelemetry.Exporter.Jaeger         # For Jaeger
+```
+
+#### 2. Configure OpenTelemetry in Program.cs
+
+```csharp
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add EventBus
+builder.Services.AddEventBus(builder.Configuration, [typeof(Program).Assembly]);
+
+// Configure OpenTelemetry
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resource => resource
+        .AddService("MyApplication"))
+    .WithTracing(tracing => tracing
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        // 👇 Add EventBus tracing
+        .AddSource("Softoverse.EventBus.InMemory")
+        .AddConsoleExporter()  // Or your preferred exporter
+    );
+
+var app = builder.Build();
+app.Run();
+```
+
+### Exporter Examples
+
+#### Export to Seq
+
+```csharp
+// Install: dotnet add package OpenTelemetry.Exporter.OpenTelemetryProtocol
+
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resource => resource
+        .AddService("MyApplication"))
+    .WithTracing(tracing => tracing
+        .AddAspNetCoreInstrumentation()
+        .AddSource("Softoverse.EventBus.InMemory")
+        .AddOtlpExporter(options =>
+        {
+            options.Endpoint = new Uri("http://localhost:5341/ingest/otlp/v1/traces");
+            options.Protocol = OpenTelemetry.Exporter.OtlpExportProtocol.HttpProtobuf;
+        })
+    );
+```
+
+**Seq Configuration**: In Seq, go to Settings → API Keys and create an OTLP ingestion key.
+
+#### Export to Jaeger
+
+```csharp
+// Install: dotnet add package OpenTelemetry.Exporter.Jaeger
+
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resource => resource
+        .AddService("MyApplication"))
+    .WithTracing(tracing => tracing
+        .AddAspNetCoreInstrumentation()
+        .AddSource("Softoverse.EventBus.InMemory")
+        .AddJaegerExporter(options =>
+        {
+            options.AgentHost = "localhost";
+            options.AgentPort = 6831;
+        })
+    );
+```
+
+#### Export to Application Insights
+
+```csharp
+// Install: dotnet add package Azure.Monitor.OpenTelemetry.Exporter
+
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resource => resource
+        .AddService("MyApplication"))
+    .WithTracing(tracing => tracing
+        .AddAspNetCoreInstrumentation()
+        .AddSource("Softoverse.EventBus.InMemory")
+        .AddAzureMonitorTraceExporter(options =>
+        {
+            options.ConnectionString = builder.Configuration["ApplicationInsights:ConnectionString"];
+        })
+    );
+```
+
+### Traced Operations
+
+The EventBus creates traces for the following operations:
+
+| Activity Name | Description | Tags |
+|--------------|-------------|------|
+| `EventBus.Publish` | Single event publication | `eventbus.event.type`, `eventbus.event.id` |
+| `EventBus.BulkPublish` | Bulk event publication | `eventbus.event.type`, `eventbus.event.count` |
+| `EventBus.Schedule` | Schedule single event | `eventbus.event.type`, `eventbus.scheduled_time` |
+| `EventBus.BulkSchedule` | Schedule multiple events | `eventbus.event.type`, `eventbus.event.count`, `eventbus.scheduled_time` |
+| `EventBus.Invoke` | Request-response invocation | `eventbus.event.type`, `eventbus.result.type` |
+| `EventBus.ProcessEvent` | Event processing | `eventbus.event.type`, `eventbus.processing.status` |
+| `EventBus.HandleEvent` | Individual handler execution | `eventbus.event.type`, `eventbus.handler.type` |
+| `EventBus.Channel.Read` | Reading from channel | `eventbus.channel.type` (Publishing/Scheduling) |
+| `EventBus.Channel.Process` | Channel processing | `eventbus.channel.type`, `eventbus.processing.status` |
+| `EventBus.ScheduledEvent.Check` | Scheduled event check | `eventbus.event.count`, `eventbus.processed.count` |
+
+### Trace Tags (Attributes)
+
+Each trace includes relevant tags for filtering and analysis:
+
+- **eventbus.event.type**: The name of the event type
+- **eventbus.event.id**: The unique identifier of the event (if available)
+- **eventbus.event.count**: Number of events in bulk operations
+- **eventbus.handler.type**: The name of the handler processing the event
+- **eventbus.scheduled_time**: When the event is scheduled to execute
+- **eventbus.processing.status**: Status of the operation (`success`, `failed`, `no_handlers`, etc.)
+- **eventbus.error.type**: Type of exception when operation fails
+- **eventbus.channel.type**: Type of channel (`Publishing` or `Scheduling`)
+
+### Example: Viewing Traces in Seq
+
+After configuring Seq exporter:
+
+1. Publish an event in your application
+2. Open Seq at `http://localhost:5341`
+3. Navigate to the Traces view
+4. Search for traces containing `EventBus.Publish`
+5. Click on a trace to see the full span hierarchy:
+
+```
+EventBus.Publish (OrderCreatedEvent)
+└── EventBus.ProcessEvent
+    ├── EventBus.HandleEvent (SendOrderEmailHandler)
+    ├── EventBus.HandleEvent (OrderInventoryHandler)
+    └── EventBus.HandleEvent (OrderAuditHandler)
+```
+
+### Example: Custom Tracing in Handlers
+
+You can add custom spans in your handlers:
+
+```csharp
+using System.Diagnostics;
+
+public class OrderCreatedHandler : IEventHandler<OrderCreatedEvent>
+{
+    private static readonly ActivitySource ActivitySource = new("MyApplication.Handlers");
+    
+    public async Task HandleAsync(OrderCreatedEvent @event, CancellationToken ct)
+    {
+        using var activity = ActivitySource.StartActivity("ProcessOrder");
+        activity?.SetTag("order.id", @event.OrderId);
+        activity?.SetTag("order.amount", @event.Amount);
+        
+        // Your processing logic
+        await ProcessOrderAsync(@event);
+        
+        activity?.SetStatus(ActivityStatusCode.Ok);
+    }
+}
+```
+
+Remember to register your custom ActivitySource:
+
+```csharp
+builder.Services.AddOpenTelemetry()
+    .WithTracing(tracing => tracing
+        .AddSource("Softoverse.EventBus.InMemory")
+        .AddSource("MyApplication.Handlers")  // 👈 Add your custom source
+        .AddOtlpExporter(/* ... */)
+    );
+```
+
+### Filtering Traces
+
+Use trace tags to filter and analyze specific scenarios:
+
+**In Seq**:
+```
+@Properties.eventbus.event.type = 'OrderCreatedEvent'
+@Properties.eventbus.processing.status = 'failed'
+```
+
+**In Jaeger**:
+- Filter by tag: `eventbus.event.type=OrderCreatedEvent`
+- Filter by operation: `EventBus.HandleEvent`
+
+### Performance Considerations
+
+- OpenTelemetry tracing has minimal performance impact (<1% in most scenarios)
+- Activities are only created when an `ActivityListener` is registered
+- **Activities are only created for actual event processing** - idle operations (empty channel reads, scheduled event checks with no due events) don't create traces to avoid noise
+- Use sampling in high-throughput scenarios to reduce overhead:
+
+```csharp
+builder.Services.AddOpenTelemetry()
+    .WithTracing(tracing => tracing
+        .AddSource("Softoverse.EventBus.InMemory")
+        .SetSampler(new TraceIdRatioBasedSampler(0.1))  // Sample 10% of traces
+        .AddOtlpExporter()
+    );
 ```
 
 ## 🛠️ Troubleshooting

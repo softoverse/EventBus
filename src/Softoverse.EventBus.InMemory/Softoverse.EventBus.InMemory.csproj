@@ -83,6 +83,7 @@ internal static class BuildConstants
         <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.2" />
         <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.2" />
         <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.2" />
+        <PackageReference Include="System.Diagnostics.DiagnosticSource" Version="10.0.0" />
     </ItemGroup>
 
 </Project>

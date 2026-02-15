@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using System.Diagnostics;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Softoverse.EventBus.InMemory.Abstractions;
 
@@ -12,42 +13,90 @@ internal class InMemoryEventProcessor(
 
     public async Task ProcessEventAsync(IEvent @event, CancellationToken cancellationToken = default)
     {
+        using var activity = EventBusDiagnostics.ActivitySource.StartActivity(EventBusDiagnostics.ActivityProcessEvent,
+                                                                              ActivityKind.Consumer);
+
         if (@event == null!)
         {
             logger.LogWarning("[InMemoryEventProcessor] Ignored null event");
+            activity?.SetTag(EventBusDiagnostics.TagProcessingStatus, "ignored_null");
             return;
         }
 
-        logger.LogInformation("[InMemoryEventProcessor] Processing event {EventType}", @event.GetType().Name);
+        var eventType = @event.GetType().Name;
+        activity?.SetTag(EventBusDiagnostics.TagEventType, eventType);
+
+        // Add event ID if available through reflection
+        var eventIdProperty = @event.GetType().GetProperty("Id");
+        if (eventIdProperty?.GetValue(@event) is Guid eventId)
+        {
+            activity?.SetTag(EventBusDiagnostics.TagEventId, eventId.ToString());
+        }
+
+        logger.LogInformation("[InMemoryEventProcessor] Processing event {EventType}", eventType);
 
         try
         {
             await ProcessEventHandlersAsync(@event, cancellationToken).ConfigureAwait(false);
+            activity?.SetTag(EventBusDiagnostics.TagProcessingStatus, EventBusDiagnostics.StatusSuccess);
+            activity?.SetStatus(ActivityStatusCode.Ok);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "[InMemoryEventProcessor] Failed to process event {EventType}", @event.GetType().Name);
+            activity?.SetTag(EventBusDiagnostics.TagProcessingStatus, EventBusDiagnostics.StatusFailed);
+            activity?.SetTag(EventBusDiagnostics.TagErrorType, ex.GetType().Name);
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            logger.LogError(ex, "[InMemoryEventProcessor] Failed to process event {EventType}", eventType);
             throw;
         }
     }
 
     public Task ProcessScheduledEventAsync(IEvent @event, DateTimeOffset scheduledTime, CancellationToken cancellationToken = default)
     {
+        using var activity = EventBusDiagnostics.ActivitySource.StartActivity(
+                                                                              EventBusDiagnostics.ActivityProcessScheduledEvent,
+                                                                              ActivityKind.Consumer);
+
         if (@event == null!)
         {
             logger.LogWarning("[InMemoryEventProcessor] Ignored null scheduled event");
+            activity?.SetTag(EventBusDiagnostics.TagProcessingStatus, "ignored_null");
             return Task.CompletedTask;
         }
 
         var scheduledTimeUtc = scheduledTime.ToUniversalTime();
+        var eventType = @event.GetType().Name;
+
+        activity?.SetTag(EventBusDiagnostics.TagEventType, eventType);
+        activity?.SetTag(EventBusDiagnostics.TagScheduledTime, scheduledTimeUtc.ToString("O"));
+
+        // Add event ID if available through reflection
+        var eventIdProperty = @event.GetType().GetProperty("Id");
+        if (eventIdProperty?.GetValue(@event) is Guid eventId)
+        {
+            activity?.SetTag(EventBusDiagnostics.TagEventId, eventId.ToString());
+        }
 
         logger.LogInformation(
                               "[InMemoryEventProcessor] Scheduling event {EventType} for {ScheduledTime} (UTC)",
-                              @event.GetType().Name,
+                              eventType,
                               scheduledTimeUtc);
 
-        // Store the event in the in-memory store for background processing
-        scheduledEventStore.AddScheduledEvent(@event, scheduledTimeUtc);
+        try
+        {
+            // Store the event in the in-memory store for background processing
+            scheduledEventStore.AddScheduledEvent(@event, scheduledTimeUtc);
+            activity?.SetTag(EventBusDiagnostics.TagProcessingStatus, EventBusDiagnostics.StatusSuccess);
+            activity?.SetStatus(ActivityStatusCode.Ok);
+        }
+        catch (Exception ex)
+        {
+            activity?.SetTag(EventBusDiagnostics.TagProcessingStatus, EventBusDiagnostics.StatusFailed);
+            activity?.SetTag(EventBusDiagnostics.TagErrorType, ex.GetType().Name);
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            logger.LogError(ex, "[InMemoryEventProcessor] Failed to schedule event {EventType}", eventType);
+            throw;
+        }
 
         return Task.CompletedTask;
     }
@@ -66,17 +115,18 @@ internal class InMemoryEventProcessor(
             var handlers = scope.ServiceProvider.GetServices<IEventHandler>();
 
             var applicableHandlers = handlers.Where(h => h.CanHandle(@event)).ToList();
+            var eventType = @event.GetType().Name;
 
             if (applicableHandlers.Count == 0)
             {
-                logger.LogWarning("[InMemoryEventProcessor] No handlers found for event type {EventType}", @event.GetType().Name);
+                logger.LogWarning("[InMemoryEventProcessor] No handlers found for event type {EventType}", eventType);
                 return;
             }
 
             logger.LogInformation(
                                   "[InMemoryEventProcessor] Found {HandlerCount} handler(s) for event type {EventType}",
                                   applicableHandlers.Count,
-                                  @event.GetType().Name);
+                                  eventType);
 
             var handlerTasks = applicableHandlers.Select(handler =>
                                                              SafeHandleAsync(handler, @event, cancellationToken));
@@ -88,13 +138,31 @@ internal class InMemoryEventProcessor(
 
     public async Task<TResult> InvokeAsync<TResult>(object @event, CancellationToken cancellationToken = default)
     {
+        using var activity = EventBusDiagnostics.ActivitySource.StartActivity(
+                                                                              EventBusDiagnostics.ActivityInvoke,
+                                                                              ActivityKind.Internal);
+
         if (@event == null!)
         {
             logger.LogWarning("[InMemoryEventProcessor] Ignored null event in InvokeAsync");
+            activity?.SetTag(EventBusDiagnostics.TagProcessingStatus, "ignored_null");
             return default!;
         }
 
-        logger.LogInformation("[InMemoryEventProcessor] Invoking event {EventType}", @event.GetType().Name);
+        var eventType = @event.GetType().Name;
+        var resultType = typeof(TResult).Name;
+
+        activity?.SetTag(EventBusDiagnostics.TagEventType, eventType);
+        activity?.SetTag(EventBusDiagnostics.TagResultType, resultType);
+
+        // Add event ID if available through reflection
+        var eventIdProperty = @event.GetType().GetProperty("Id");
+        if (eventIdProperty?.GetValue(@event) is Guid eventId)
+        {
+            activity?.SetTag(EventBusDiagnostics.TagEventId, eventId.ToString());
+        }
+
+        logger.LogInformation("[InMemoryEventProcessor] Invoking event {EventType}", eventType);
 
         try
         {
@@ -108,40 +176,74 @@ internal class InMemoryEventProcessor(
             if (handler is IRequestHandler baseHandler &&
                 baseHandler.CanHandle(@event))
             {
+                activity?.SetTag(EventBusDiagnostics.TagHandlerType, handler.GetType().Name);
+
                 object? result = await baseHandler
                     .HandleAsync(@event, cancellationToken);
+
+                activity?.SetTag(EventBusDiagnostics.TagProcessingStatus, EventBusDiagnostics.StatusSuccess);
+                activity?.SetStatus(ActivityStatusCode.Ok);
 
                 return (TResult?) result!;
             }
 
-            logger.LogWarning("[InMemoryEventProcessor] No handler found for event type {EventType}", @event.GetType().Name);
+            logger.LogWarning("[InMemoryEventProcessor] No handler found for event type {EventType}", eventType);
+            activity?.SetTag(EventBusDiagnostics.TagProcessingStatus, EventBusDiagnostics.StatusNoHandlers);
             return default!;
 
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "[InMemoryEventProcessor] Failed to invoke event {EventType}", @event.GetType().Name);
+            activity?.SetTag(EventBusDiagnostics.TagProcessingStatus, EventBusDiagnostics.StatusFailed);
+            activity?.SetTag(EventBusDiagnostics.TagErrorType, ex.GetType().Name);
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            logger.LogError(ex, "[InMemoryEventProcessor] Failed to invoke event {EventType}", eventType);
             throw;
         }
     }
 
     private async Task SafeHandleAsync(IEventHandler handler, IEvent @event, CancellationToken cancellationToken)
     {
+        using var activity = EventBusDiagnostics.ActivitySource.StartActivity(
+                                                                              EventBusDiagnostics.ActivityHandleEvent,
+                                                                              ActivityKind.Internal);
+
+        var handlerType = handler.GetType().Name;
+        var eventType = @event.GetType().Name;
+
+        activity?.SetTag(EventBusDiagnostics.TagHandlerType, handlerType);
+        activity?.SetTag(EventBusDiagnostics.TagEventType, eventType);
+
+        // Add event ID if available through reflection
+        var eventIdProperty = @event.GetType().GetProperty("Id");
+        if (eventIdProperty?.GetValue(@event) is Guid eventId)
+        {
+            activity?.SetTag(EventBusDiagnostics.TagEventId, eventId.ToString());
+        }
+
         try
         {
             await handler.HandleAsync(@event, cancellationToken).ConfigureAwait(false);
+
+            activity?.SetTag(EventBusDiagnostics.TagProcessingStatus, EventBusDiagnostics.StatusSuccess);
+            activity?.SetStatus(ActivityStatusCode.Ok);
+
             logger.LogInformation(
                                   "[InMemoryEventProcessor] Handler {HandlerType} successfully processed event {EventType}",
-                                  handler.GetType().Name,
-                                  @event.GetType().Name);
+                                  handlerType,
+                                  eventType);
         }
         catch (Exception ex)
         {
+            activity?.SetTag(EventBusDiagnostics.TagProcessingStatus, EventBusDiagnostics.StatusFailed);
+            activity?.SetTag(EventBusDiagnostics.TagErrorType, ex.GetType().Name);
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+
             logger.LogError(
                             ex,
                             "[InMemoryEventProcessor] Handler {HandlerType} failed to process event {EventType}",
-                            handler.GetType().Name,
-                            @event.GetType().Name);
+                            handlerType,
+                            eventType);
             // Don't re-throw to allow other handlers to continue processing
         }
     }

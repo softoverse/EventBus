@@ -1,5 +1,4 @@
 using System.Threading.Channels;
-
 using Softoverse.EventBus.InMemory.Abstractions;
 using Softoverse.EventBus.InMemory.Models.Settings;
 

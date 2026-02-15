@@ -1,8 +1,6 @@
 using System.Reflection;
-
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-
 using Softoverse.EventBus.InMemory.Abstractions;
 using Softoverse.EventBus.InMemory.Infrastructure;
 using Softoverse.EventBus.InMemory.Infrastructure.Services;
@@ -13,10 +11,10 @@ namespace Softoverse.EventBus.InMemory;
 public static class DependencyInjection
 {
     internal static bool UsingDefaultEventProcessor = false;
-    
+
     public static IServiceCollection AddEventBus<TEventProcessor>(this IServiceCollection services, IConfiguration configuration, params List<Assembly> assemblies)
         where TEventProcessor : class, IEventProcessor
-    {        
+    {
         UsingDefaultEventProcessor = false;
 
         services.AddEventBusSettings(configuration);
@@ -68,10 +66,10 @@ public static class DependencyInjection
         foreach (var assembly in assemblies)
         {
             var eventHandlerTypes = assembly.GetTypes().Where(t => t is
-                                                  {
-                                                      IsClass   : true,
-                                                      IsAbstract: false
-                                                  } && eventHandlerMarker.IsAssignableFrom(t));
+                                                              {
+                                                                  IsClass   : true,
+                                                                  IsAbstract: false
+                                                              } && eventHandlerMarker.IsAssignableFrom(t));
 
             foreach (var implType in eventHandlerTypes)
             {
@@ -91,14 +89,14 @@ public static class DependencyInjection
                     }
                 }
             }
-            
+
 
             var genericRequestHandlerTypes = new HashSet<Type>();
             var requestHandlerTypes = assembly.GetTypes().Where(t => t is
-                                                  {
-                                                      IsClass   : true,
-                                                      IsAbstract: false
-                                                  } && requestHandlerMarker.IsAssignableFrom(t));
+                                                                {
+                                                                    IsClass   : true,
+                                                                    IsAbstract: false
+                                                                } && requestHandlerMarker.IsAssignableFrom(t));
 
             foreach (var implType in requestHandlerTypes)
             {
