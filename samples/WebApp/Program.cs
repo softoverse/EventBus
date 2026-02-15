@@ -12,8 +12,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
 builder.Services.AddSwaggerGen();
 
-List<Assembly> assemblies = [
-    typeof(Program).Assembly, 
+List<Assembly> assemblies =
+[
+    typeof(Program).Assembly,
     typeof(TestScheduledHandler).Assembly
 ];
 
@@ -30,23 +31,34 @@ builder.Services.AddSingleton(new EventTracker());
 
 // Configure OpenTelemetry
 builder.Services.AddOpenTelemetry()
-    .ConfigureResource(resource => resource
-        .AddService("EventBus.WebApp.Sample")
-        .AddTelemetrySdk())
-    .WithTracing(tracing => tracing
-        .AddAspNetCoreInstrumentation()
-        .AddHttpClientInstrumentation()
-        // Add EventBus tracing - this enables distributed tracing for all event bus operations
-        .AddSource("Softoverse.EventBus.InMemory")
-        // Export to console for demo purposes (replace with OTLP/Seq/Jaeger in production)
-        .AddConsoleExporter()
-        // Uncomment below to export to Seq (requires Seq running on localhost:5341)
-        // .AddOtlpExporter(options =>
-        // {
-        //     options.Endpoint = new Uri("http://localhost:5341/ingest/otlp/v1/traces");
-        //     options.Protocol = OpenTelemetry.Exporter.OtlpExportProtocol.HttpProtobuf;
-        // })
-    );
+       .ConfigureResource(resource => resource
+                                      .AddService("EventBus.WebApp.Sample")
+                                      .AddTelemetrySdk())
+       .WithTracing(tracing =>
+       {
+           tracing.AddAspNetCoreInstrumentation()
+                  .AddHttpClientInstrumentation()
+                  // Add EventBus tracing - this enables distributed tracing for all event bus operations
+                  .AddSource("Softoverse.EventBus.InMemory");
+
+           // For development: Console exporter to see traces in console
+           // For production: Comment this out or use configuration to conditionally add
+           // Uncomment below to export to console
+           // tracing.AddConsoleExporter();
+
+           // Uncomment below to export to Seq (requires Seq running on localhost:5341)
+           tracing.AddOtlpExporter(options =>
+           {
+               options.Endpoint = new Uri("http://localhost:5341/ingest/otlp/v1/traces");
+               options.Protocol = OpenTelemetry.Exporter.OtlpExportProtocol.HttpProtobuf;
+           });
+
+           // Other popular exporters:
+           // - Jaeger: tracing.AddJaegerExporter()
+           // - Zipkin: tracing.AddZipkinExporter()
+           // - Azure Monitor: tracing.AddAzureMonitorTraceExporter()
+           // - AWS X-Ray: Add AWS X-Ray exporter package
+       });
 
 var app = builder.Build();
 

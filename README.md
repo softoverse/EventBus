@@ -682,6 +682,10 @@ public async Task HandleAsync(OrderCreatedEvent @event, CancellationToken ct)
 
 The EventBus library includes built-in support for distributed tracing using **OpenTelemetry**. This allows you to trace event publishing, processing, and handler execution in observability platforms like **Seq**, **Jaeger**, **Zipkin**, or **Application Insights**.
 
+> 📚 **For detailed documentation, examples, and troubleshooting**, see [OpenTelemetry Integration Guide](./docs/OPENTELEMETRY_INTEGRATION.md)
+
+> 💡 **Note**: If you see detailed trace output in your console (Activity.TraceId, Activity.SpanId, etc.), this is **completely normal** when using `.AddConsoleExporter()` - it's intended for development/debugging and shows that tracing is working correctly! For production, use a proper APM exporter instead.
+
 ### Activity Source
 
 The library exposes an `ActivitySource` named `"Softoverse.EventBus.InMemory"` that creates traces for all event bus operations.
@@ -717,13 +721,21 @@ builder.Services.AddEventBus(builder.Configuration, [typeof(Program).Assembly]);
 builder.Services.AddOpenTelemetry()
     .ConfigureResource(resource => resource
         .AddService("MyApplication"))
-    .WithTracing(tracing => tracing
-        .AddAspNetCoreInstrumentation()
-        .AddHttpClientInstrumentation()
-        // 👇 Add EventBus tracing
-        .AddSource("Softoverse.EventBus.InMemory")
-        .AddConsoleExporter()  // Or your preferred exporter
-    );
+    .WithTracing(tracing =>
+    {
+        tracing
+            .AddAspNetCoreInstrumentation()
+            .AddHttpClientInstrumentation()
+            // 👇 Add EventBus tracing
+            .AddSource("Softoverse.EventBus.InMemory");
+
+        // Console exporter for development (produces detailed output in console)
+        if (builder.Environment.IsDevelopment())
+        {
+            tracing.AddConsoleExporter();
+        }
+        // Use your preferred production exporter (Seq, Jaeger, Application Insights, etc.)
+    });
 
 var app = builder.Build();
 app.Run();
