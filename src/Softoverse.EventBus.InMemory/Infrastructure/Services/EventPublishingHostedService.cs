@@ -18,7 +18,7 @@ internal class EventPublishingHostedService(
 
     protected async override Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        logger.LogInformation("EventPublishingHostedService started.");
+        logger.PublishingServiceStarted();
         using var scope = scopeFactory.CreateScope();
         var eventProcessor = scope.ServiceProvider.GetRequiredService<IEventProcessor>();
         var reader = channelProvider.PublishingChannel.Reader;
@@ -30,13 +30,13 @@ internal class EventPublishingHostedService(
 
                 if (@event == null)
                 {
-                    logger.LogWarning("[EventPublishingHostedService] Received null event from channel");
+                    logger.ReceivedNullEventFromPublishingChannel();
                     continue;
                 }
 
                 var eventType = @event.GetType().Name;
 
-                logger.LogInformation("[EventPublishingHostedService] Received event of type {EventType}", eventType);
+                logger.ReceivedEventFromPublishingChannel(eventType);
 
                 // Create activity only when processing actual events
                 using var processActivity = EventBusDiagnostics.ActivitySource.StartActivity(
@@ -66,7 +66,7 @@ internal class EventPublishingHostedService(
                     processActivity?.SetTag(EventBusDiagnostics.TagProcessingStatus, EventBusDiagnostics.StatusFailed);
                     processActivity?.SetTag(EventBusDiagnostics.TagErrorType, ex.GetType().Name);
                     processActivity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-                    logger.LogError(ex, "[EventPublishingHostedService] Failed to publish event {EventType}", eventType);
+                    logger.PublishingChannelProcessFailed(ex, eventType);
                 }
                 finally
                 {
@@ -79,9 +79,9 @@ internal class EventPublishingHostedService(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Error while processing event from channel.");
+                logger.PublishingChannelReadError(ex);
             }
         }
-        logger.LogInformation("EventPublishingHostedService stopped.");
+        logger.PublishingServiceStopped();
     }
 }

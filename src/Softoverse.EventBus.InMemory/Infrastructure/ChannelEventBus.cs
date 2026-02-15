@@ -23,7 +23,7 @@ internal class ChannelEventBus(
 
         if (@event == null!)
         {
-            logger.LogWarning("[ChannelEventBus] Ignored null event of type {EventType}", eventType);
+            logger.IgnoredNullEvent(eventType);
             activity?.SetTag(EventBusDiagnostics.TagProcessingStatus, "ignored_null");
             return;
         }
@@ -35,7 +35,7 @@ internal class ChannelEventBus(
             activity?.SetTag(EventBusDiagnostics.TagEventId, eventId.ToString());
         }
 
-        logger.LogInformation("[ChannelEventBus] Publishing {EventType}", eventType);
+        logger.PublishingEvent(eventType);
 
         try
         {
@@ -48,7 +48,7 @@ internal class ChannelEventBus(
             activity?.SetTag(EventBusDiagnostics.TagProcessingStatus, EventBusDiagnostics.StatusFailed);
             activity?.SetTag(EventBusDiagnostics.TagErrorType, ex.GetType().Name);
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            logger.LogError(ex, "[ChannelEventBus] Failed to publish event {EventType}", eventType);
+            logger.PublishEventFailed(ex, eventType);
             throw;
         }
     }
@@ -67,7 +67,7 @@ internal class ChannelEventBus(
         activity?.SetTag(EventBusDiagnostics.TagEventType, eventType);
         activity?.SetTag(EventBusDiagnostics.TagEventCount, eventCount);
 
-        logger.LogInformation("[ChannelEventBus] Bulk publishing {EventCount} events of type {EventType}", eventCount, eventType);
+        logger.BulkPublishingEvents(eventCount, eventType);
 
         try
         {
@@ -87,7 +87,7 @@ internal class ChannelEventBus(
             activity?.SetTag(EventBusDiagnostics.TagProcessingStatus, EventBusDiagnostics.StatusFailed);
             activity?.SetTag(EventBusDiagnostics.TagErrorType, ex.GetType().Name);
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            logger.LogError(ex, "[ChannelEventBus] Failed to bulk publish events of type {EventType}", eventType);
+            logger.BulkPublishEventsFailed(ex, eventType);
             throw;
         }
     }
@@ -104,7 +104,7 @@ internal class ChannelEventBus(
 
         if (@event == null!)
         {
-            logger.LogWarning("[ChannelEventBus] Ignored null event of type {EventType}", eventType);
+            logger.IgnoredNullEvent(eventType);
             activity?.SetTag(EventBusDiagnostics.TagProcessingStatus, "ignored_null");
             return;
         }
@@ -116,7 +116,7 @@ internal class ChannelEventBus(
             activity?.SetTag(EventBusDiagnostics.TagEventId, eventId.ToString());
         }
 
-        logger.LogInformation("[ChannelEventBus] Scheduling {EventType} for {ScheduledTime}", eventType, scheduleTime);
+        logger.SchedulingEvent(eventType, scheduleTime);
 
         try
         {
@@ -129,7 +129,7 @@ internal class ChannelEventBus(
             activity?.SetTag(EventBusDiagnostics.TagProcessingStatus, EventBusDiagnostics.StatusFailed);
             activity?.SetTag(EventBusDiagnostics.TagErrorType, ex.GetType().Name);
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            logger.LogError(ex, "[ChannelEventBus] Failed to schedule event {EventType}", eventType);
+            logger.ScheduleEventFailed(ex, eventType);
             throw;
         }
     }
@@ -148,8 +148,7 @@ internal class ChannelEventBus(
         activity?.SetTag(EventBusDiagnostics.TagEventCount, eventCount);
         activity?.SetTag(EventBusDiagnostics.TagScheduledTime, scheduleTime.ToString("O"));
 
-        logger.LogInformation("[ChannelEventBus] Bulk scheduling {EventCount} events of type {EventType} for {ScheduledTime}",
-                              eventCount, eventType, scheduleTime);
+        logger.BulkSchedulingEvents(eventCount, eventType, scheduleTime);
 
         try
         {
@@ -169,7 +168,7 @@ internal class ChannelEventBus(
             activity?.SetTag(EventBusDiagnostics.TagProcessingStatus, EventBusDiagnostics.StatusFailed);
             activity?.SetTag(EventBusDiagnostics.TagErrorType, ex.GetType().Name);
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            logger.LogError(ex, "[ChannelEventBus] Failed to bulk schedule events of type {EventType}", eventType);
+            logger.BulkScheduleEventsFailed(ex, eventType);
             throw;
         }
     }
@@ -188,7 +187,7 @@ internal class ChannelEventBus(
 
         if (@event == null!)
         {
-            logger.LogWarning("[ChannelEventBus] Ignored null event");
+            logger.IgnoredNullEventInvoke();
             activity?.SetTag(EventBusDiagnostics.TagProcessingStatus, "ignored_null");
             return default!;
         }
@@ -200,7 +199,7 @@ internal class ChannelEventBus(
             activity?.SetTag(EventBusDiagnostics.TagEventId, eventId.ToString());
         }
 
-        logger.LogInformation("[ChannelEventBus] Invoking {EventType} expecting result {ResultType}", eventType, resultType);
+        logger.InvokingEvent(eventType!, resultType);
 
         try
         {
@@ -214,7 +213,7 @@ internal class ChannelEventBus(
             activity?.SetTag(EventBusDiagnostics.TagProcessingStatus, EventBusDiagnostics.StatusFailed);
             activity?.SetTag(EventBusDiagnostics.TagErrorType, ex.GetType().Name);
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            logger.LogError(ex, "[ChannelEventBus] Failed to invoke event {EventType}", eventType);
+            logger.InvokeEventFailed(ex, eventType!);
             throw;
         }
     }

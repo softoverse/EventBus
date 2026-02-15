@@ -18,7 +18,7 @@ internal class EventSchedulingHostedService(
 
     protected async override Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        logger.LogInformation("EventSchedulingHostedService started.");
+        logger.SchedulingServiceStarted();
         using var scope = scopeFactory.CreateScope();
         var eventProcessor = scope.ServiceProvider.GetRequiredService<IEventProcessor>();
         var reader = channelProvider.SchedulingChannel.Reader;
@@ -30,13 +30,13 @@ internal class EventSchedulingHostedService(
 
                 if (scheduledEvent.Event == null)
                 {
-                    logger.LogWarning("[EventSchedulingHostedService] Received null event from channel");
+                    logger.ReceivedNullEventFromSchedulingChannel();
                     continue;
                 }
 
                 var eventType = scheduledEvent.Event.GetType().Name;
 
-                logger.LogInformation("[EventSchedulingHostedService] Received event of type {EventType}", eventType);
+                logger.ReceivedEventFromSchedulingChannel(eventType);
 
                 // Create activity only when processing actual events
                 using var processActivity = EventBusDiagnostics.ActivitySource.StartActivity(
@@ -67,7 +67,7 @@ internal class EventSchedulingHostedService(
                     processActivity?.SetTag(EventBusDiagnostics.TagProcessingStatus, EventBusDiagnostics.StatusFailed);
                     processActivity?.SetTag(EventBusDiagnostics.TagErrorType, ex.GetType().Name);
                     processActivity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-                    logger.LogError(ex, "[EventSchedulingHostedService] Failed to publish event {EventType}", eventType);
+                    logger.SchedulingChannelProcessFailed(ex, eventType);
                 }
                 finally
                 {
@@ -80,9 +80,9 @@ internal class EventSchedulingHostedService(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Error while processing event from channel.");
+                logger.SchedulingChannelReadError(ex);
             }
         }
-        logger.LogInformation("EventSchedulingHostedService stopped.");
+        logger.SchedulingServiceStopped();
     }
 }

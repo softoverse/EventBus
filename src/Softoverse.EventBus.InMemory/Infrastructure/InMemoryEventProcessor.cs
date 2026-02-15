@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+﻿﻿using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Softoverse.EventBus.InMemory.Abstractions;
@@ -18,7 +18,7 @@ internal class InMemoryEventProcessor(
 
         if (@event == null!)
         {
-            logger.LogWarning("[InMemoryEventProcessor] Ignored null event");
+            logger.IgnoredNullEventInProcessor();
             activity?.SetTag(EventBusDiagnostics.TagProcessingStatus, "ignored_null");
             return;
         }
@@ -33,7 +33,7 @@ internal class InMemoryEventProcessor(
             activity?.SetTag(EventBusDiagnostics.TagEventId, eventId.ToString());
         }
 
-        logger.LogInformation("[InMemoryEventProcessor] Processing event {EventType}", eventType);
+        logger.ProcessingEvent(eventType);
 
         try
         {
@@ -46,7 +46,7 @@ internal class InMemoryEventProcessor(
             activity?.SetTag(EventBusDiagnostics.TagProcessingStatus, EventBusDiagnostics.StatusFailed);
             activity?.SetTag(EventBusDiagnostics.TagErrorType, ex.GetType().Name);
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            logger.LogError(ex, "[InMemoryEventProcessor] Failed to process event {EventType}", eventType);
+            logger.ProcessEventFailed(ex, eventType);
             throw;
         }
     }
@@ -59,7 +59,7 @@ internal class InMemoryEventProcessor(
 
         if (@event == null!)
         {
-            logger.LogWarning("[InMemoryEventProcessor] Ignored null scheduled event");
+            logger.IgnoredNullScheduledEvent();
             activity?.SetTag(EventBusDiagnostics.TagProcessingStatus, "ignored_null");
             return Task.CompletedTask;
         }
@@ -77,10 +77,7 @@ internal class InMemoryEventProcessor(
             activity?.SetTag(EventBusDiagnostics.TagEventId, eventId.ToString());
         }
 
-        logger.LogInformation(
-                              "[InMemoryEventProcessor] Scheduling event {EventType} for {ScheduledTime} (UTC)",
-                              eventType,
-                              scheduledTimeUtc);
+        logger.SchedulingEventForProcessing(eventType, scheduledTimeUtc);
 
         try
         {
@@ -94,7 +91,7 @@ internal class InMemoryEventProcessor(
             activity?.SetTag(EventBusDiagnostics.TagProcessingStatus, EventBusDiagnostics.StatusFailed);
             activity?.SetTag(EventBusDiagnostics.TagErrorType, ex.GetType().Name);
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            logger.LogError(ex, "[InMemoryEventProcessor] Failed to schedule event {EventType}", eventType);
+            logger.ScheduleEventForProcessingFailed(ex, eventType);
             throw;
         }
 
@@ -105,7 +102,7 @@ internal class InMemoryEventProcessor(
     {
         if (@event == null!)
         {
-            logger.LogWarning("[InMemoryEventProcessor] Ignored null event in ProcessEventHandlersAsync");
+            logger.IgnoredNullEventInProcessor();
             return Task.CompletedTask;
         }
 
@@ -119,14 +116,11 @@ internal class InMemoryEventProcessor(
 
             if (applicableHandlers.Count == 0)
             {
-                logger.LogWarning("[InMemoryEventProcessor] No handlers found for event type {EventType}", eventType);
+                logger.NoHandlersFound(eventType);
                 return;
             }
 
-            logger.LogInformation(
-                                  "[InMemoryEventProcessor] Found {HandlerCount} handler(s) for event type {EventType}",
-                                  applicableHandlers.Count,
-                                  eventType);
+            logger.HandlersFound(applicableHandlers.Count, eventType);
 
             var handlerTasks = applicableHandlers.Select(handler =>
                                                              SafeHandleAsync(handler, @event, cancellationToken));
@@ -144,7 +138,7 @@ internal class InMemoryEventProcessor(
 
         if (@event == null!)
         {
-            logger.LogWarning("[InMemoryEventProcessor] Ignored null event in InvokeAsync");
+            logger.IgnoredNullEventInProcessorInvoke();
             activity?.SetTag(EventBusDiagnostics.TagProcessingStatus, "ignored_null");
             return default!;
         }
@@ -162,7 +156,7 @@ internal class InMemoryEventProcessor(
             activity?.SetTag(EventBusDiagnostics.TagEventId, eventId.ToString());
         }
 
-        logger.LogInformation("[InMemoryEventProcessor] Invoking event {EventType}", eventType);
+        logger.InvokingEventInProcessor(eventType);
 
         try
         {
@@ -187,7 +181,7 @@ internal class InMemoryEventProcessor(
                 return (TResult?) result!;
             }
 
-            logger.LogWarning("[InMemoryEventProcessor] No handler found for event type {EventType}", eventType);
+            logger.NoHandlerFoundForInvoke(eventType);
             activity?.SetTag(EventBusDiagnostics.TagProcessingStatus, EventBusDiagnostics.StatusNoHandlers);
             return default!;
 
@@ -197,7 +191,7 @@ internal class InMemoryEventProcessor(
             activity?.SetTag(EventBusDiagnostics.TagProcessingStatus, EventBusDiagnostics.StatusFailed);
             activity?.SetTag(EventBusDiagnostics.TagErrorType, ex.GetType().Name);
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            logger.LogError(ex, "[InMemoryEventProcessor] Failed to invoke event {EventType}", eventType);
+            logger.InvokeEventInProcessorFailed(ex, eventType);
             throw;
         }
     }
@@ -228,10 +222,7 @@ internal class InMemoryEventProcessor(
             activity?.SetTag(EventBusDiagnostics.TagProcessingStatus, EventBusDiagnostics.StatusSuccess);
             activity?.SetStatus(ActivityStatusCode.Ok);
 
-            logger.LogInformation(
-                                  "[InMemoryEventProcessor] Handler {HandlerType} successfully processed event {EventType}",
-                                  handlerType,
-                                  eventType);
+            logger.HandlerSucceeded(handlerType, eventType);
         }
         catch (Exception ex)
         {
@@ -239,11 +230,7 @@ internal class InMemoryEventProcessor(
             activity?.SetTag(EventBusDiagnostics.TagErrorType, ex.GetType().Name);
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
 
-            logger.LogError(
-                            ex,
-                            "[InMemoryEventProcessor] Handler {HandlerType} failed to process event {EventType}",
-                            handlerType,
-                            eventType);
+            logger.HandlerFailed(ex, handlerType, eventType);
             // Don't re-throw to allow other handlers to continue processing
         }
     }

@@ -70,17 +70,11 @@ public class ScheduledEventStore(ILogger<ScheduledEventStore> logger)
 
         if (_scheduledEvents.TryAdd(id, entry))
         {
-            logger.LogDebug(
-                            "[ScheduledEventStore] Added scheduled event {EventId} of type {EventType} for {ScheduledTime}",
-                            id,
-                            @event.GetType().Name,
-                            scheduledTime);
+            logger.ScheduledEventAdded(id, @event.GetType().Name, scheduledTime);
             return id;
         }
 
-        logger.LogWarning(
-                          "[ScheduledEventStore] Failed to add scheduled event {EventId} (duplicate ID)",
-                          id);
+        logger.ScheduledEventAddFailed(id);
         throw new InvalidOperationException($"Failed to add scheduled event with ID {id}");
     }
 
@@ -113,16 +107,11 @@ public class ScheduledEventStore(ILogger<ScheduledEventStore> logger)
     {
         if (_scheduledEvents.TryRemove(eventId, out var entry))
         {
-            logger.LogDebug(
-                            "[ScheduledEventStore] Removed scheduled event {EventId} of type {EventType}",
-                            eventId,
-                            entry.Event.GetType().Name);
+            logger.ScheduledEventRemoved(eventId, entry.Event.GetType().Name);
             return true;
         }
 
-        logger.LogWarning(
-                          "[ScheduledEventStore] Failed to remove scheduled event {EventId} (not found)",
-                          eventId);
+        logger.ScheduledEventRemoveFailed(eventId);
         return false;
     }
 
@@ -137,9 +126,7 @@ public class ScheduledEventStore(ILogger<ScheduledEventStore> logger)
     {
         if (!_scheduledEvents.TryGetValue(eventId, out var entry))
         {
-            logger.LogWarning(
-                              "[ScheduledEventStore] Failed to update status for event {EventId} (not found)",
-                              eventId);
+            logger.ScheduledEventStatusUpdateFailed(eventId);
             return false;
         }
 
@@ -148,11 +135,7 @@ public class ScheduledEventStore(ILogger<ScheduledEventStore> logger)
         entry.StatusUpdatedAt = DateTimeOffset.UtcNow;
         entry.Remarks = remarks;
 
-        logger.LogDebug(
-                        "[ScheduledEventStore] Updated event {EventId} status from {OldStatus} to {NewStatus}",
-                        eventId,
-                        oldStatus,
-                        status);
+        logger.ScheduledEventStatusUpdated(eventId, oldStatus, status);
 
         return true;
     }

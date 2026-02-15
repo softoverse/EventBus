@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+﻿﻿using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -22,7 +22,7 @@ internal class ScheduledEventProcessingHostedService(
 
     protected async override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        logger.LogInformation("[ScheduledEventProcessingHostedService] Started");
+        logger.ScheduledEventProcessingServiceStarted();
 
         // Use configurable check interval, defaulting to 1 second
         var checkInterval = TimeSpan.FromSeconds(eventBusSettings.ExecuteAfterSeconds > 0
@@ -48,13 +48,13 @@ internal class ScheduledEventProcessingHostedService(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "[ScheduledEventProcessingHostedService] Error in main loop");
+                logger.ScheduledEventProcessingMainLoopError(ex);
                 // Continue processing after logging the error
                 await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
             }
         }
 
-        logger.LogInformation("[ScheduledEventProcessingHostedService] Stopped");
+        logger.ScheduledEventProcessingServiceStopped();
     }
 
     private async Task ProcessDueEventsAsync(CancellationToken cancellationToken)
@@ -75,9 +75,7 @@ internal class ScheduledEventProcessingHostedService(
         activity?.SetTag(EventBusDiagnostics.TagEventCount, dueEvents.Count);
 
 
-        logger.LogInformation(
-                              "[ScheduledEventProcessingHostedService] Found {Count} due event(s) to process",
-                              dueEvents.Count);
+        logger.FoundDueEvents(dueEvents.Count);
 
         await using var scope = scopeFactory.CreateAsyncScope();
         var eventBus = scope.ServiceProvider.GetRequiredService<IEventBus>();
@@ -99,19 +97,14 @@ internal class ScheduledEventProcessingHostedService(
             // Mark as in progress immediately to prevent duplicate execution
             if (!scheduledEventStore.MarkAsInProgress(scheduledEvent.Id))
             {
-                logger.LogWarning(
-                                  "[ScheduledEventProcessingHostedService] Failed to mark event {EventId} as InProgress, skipping",
-                                  scheduledEvent.Id);
+                logger.FailedToMarkEventInProgress(scheduledEvent.Id);
                 eventActivity?.SetTag(EventBusDiagnostics.TagProcessingStatus, "skipped_in_progress");
                 continue;
             }
 
             try
             {
-                logger.LogInformation(
-                                      "[ScheduledEventProcessingHostedService] Processing scheduled event {EventId} of type {EventType}",
-                                      scheduledEvent.Id,
-                                      eventType);
+                logger.ProcessingScheduledEvent(scheduledEvent.Id, eventType);
 
                 await eventBus.PublishAsync(scheduledEvent.Event, cancellationToken);
 
@@ -123,9 +116,7 @@ internal class ScheduledEventProcessingHostedService(
                 eventActivity?.SetTag(EventBusDiagnostics.TagProcessingStatus, EventBusDiagnostics.StatusSuccess);
                 eventActivity?.SetStatus(ActivityStatusCode.Ok);
 
-                logger.LogInformation(
-                                      "[ScheduledEventProcessingHostedService] Successfully processed and removed event {EventId}",
-                                      scheduledEvent.Id);
+                logger.ScheduledEventProcessedSuccessfully(scheduledEvent.Id);
             }
             catch (Exception ex)
             {
@@ -134,11 +125,7 @@ internal class ScheduledEventProcessingHostedService(
                 eventActivity?.SetTag(EventBusDiagnostics.TagErrorType, ex.GetType().Name);
                 eventActivity?.SetStatus(ActivityStatusCode.Error, ex.Message);
 
-                logger.LogError(
-                                ex,
-                                "[ScheduledEventProcessingHostedService] Failed to process scheduled event {EventId} of type {EventType}",
-                                scheduledEvent.Id,
-                                eventType);
+                logger.ScheduledEventProcessingFailed(ex, scheduledEvent.Id, eventType);
 
                 // Mark as failed with the error message
                 scheduledEventStore.MarkAsFailed(scheduledEvent.Id, ex.Message);
