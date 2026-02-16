@@ -18,7 +18,7 @@ internal static class EventBusDiagnostics
     /// <summary>
     /// The version of the library for telemetry purposes.
     /// </summary>
-    public const string Version = "10.7.0";
+    public const string Version = BuildConstants.CurrentVersion;
 
     /// <summary>
     /// The ActivitySource instance used for creating activities (spans) throughout the library.
