@@ -9,6 +9,7 @@ public static class Endpoints
     {
         public void MapEndpoints()
         {
+            // for i in {1..1000}; do curl -X GET 'http://localhost:5000/publish' -H 'accept: */*' -d ''; echo "Request $i"; done
             app.MapGet("invoke", InvokeAsync);
             app.MapGet("publish", PublishAsync);
             app.MapGet("bulk-publish", BulkPublishAsync);
