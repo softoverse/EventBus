@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+﻿﻿using System.Diagnostics;
 
 namespace Softoverse.EventBus.InMemory.Infrastructure;
 
@@ -34,6 +34,7 @@ internal static class EventBusDiagnostics
     public const string ActivityProcessEvent = "EventBus.ProcessEvent";
     public const string ActivityProcessScheduledEvent = "EventBus.ProcessScheduledEvent";
     public const string ActivityHandleEvent = "EventBus.HandleEvent";
+    public const string ActivityProcessHandlers = "EventBus.ProcessHandlers";
     public const string ActivityChannelRead = "EventBus.Channel.Read";
     public const string ActivityChannelProcess = "EventBus.Channel.Process";
     public const string ActivityScheduledEventCheck = "EventBus.ScheduledEvent.Check";

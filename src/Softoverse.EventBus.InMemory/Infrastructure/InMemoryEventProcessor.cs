@@ -26,12 +26,9 @@ internal class InMemoryEventProcessor(
         var eventType = @event.GetType().Name;
         activity?.SetTag(EventBusDiagnostics.TagEventType, eventType);
 
-        // Add event ID if available through reflection
-        var eventIdProperty = @event.GetType().GetProperty("Id");
-        if (eventIdProperty?.GetValue(@event) is Guid eventId)
-        {
-            activity?.SetTag(EventBusDiagnostics.TagEventId, eventId.ToString());
-        }
+        var eventId = TryGetEventId(@event);
+        if (eventId.HasValue)
+            activity?.SetTag(EventBusDiagnostics.TagEventId, eventId.Value.ToString());
 
         logger.ProcessingEvent(eventType);
 
@@ -70,12 +67,9 @@ internal class InMemoryEventProcessor(
         activity?.SetTag(EventBusDiagnostics.TagEventType, eventType);
         activity?.SetTag(EventBusDiagnostics.TagScheduledTime, scheduledTimeUtc.ToString("O"));
 
-        // Add event ID if available through reflection
-        var eventIdProperty = @event.GetType().GetProperty("Id");
-        if (eventIdProperty?.GetValue(@event) is Guid eventId)
-        {
-            activity?.SetTag(EventBusDiagnostics.TagEventId, eventId.ToString());
-        }
+        var eventId = TryGetEventId(@event);
+        if (eventId.HasValue)
+            activity?.SetTag(EventBusDiagnostics.TagEventId, eventId.Value.ToString());
 
         logger.SchedulingEventForProcessing(eventType, scheduledTimeUtc);
 
@@ -106,27 +100,64 @@ internal class InMemoryEventProcessor(
             return Task.CompletedTask;
         }
 
+        // Capture the parent context BEFORE entering Task.Run so the child span
+        // is correctly linked even after the caller's span has been disposed.
+        var parentContext = Activity.Current?.Context ?? default;
+
         _ = Task.Run(async () =>
         {
-            await using var scope = scopeFactory.CreateAsyncScope();
-            var handlers = scope.ServiceProvider.GetServices<IEventHandler>();
-
-            var applicableHandlers = handlers.Where(h => h.CanHandle(@event)).ToList();
             var eventType = @event.GetType().Name;
 
-            if (applicableHandlers.Count == 0)
+            using var activity = EventBusDiagnostics.ActivitySource.StartActivity(
+                EventBusDiagnostics.ActivityProcessHandlers,
+                ActivityKind.Internal,
+                parentContext);
+
+            activity?.SetTag(EventBusDiagnostics.TagEventType, eventType);
+
+            var eventId = TryGetEventId(@event);
+            if (eventId.HasValue)
+                activity?.SetTag(EventBusDiagnostics.TagEventId, eventId.Value.ToString());
+
+            try
             {
-                logger.NoHandlersFound(eventType);
-                return;
+                await using var scope = scopeFactory.CreateAsyncScope();
+                var handlers = scope.ServiceProvider.GetServices<IEventHandler>();
+
+                var applicableHandlers = handlers.Where(h => h.CanHandle(@event)).ToList();
+
+                if (applicableHandlers.Count == 0)
+                {
+                    logger.NoHandlersFound(eventType);
+                    activity?.SetTag(EventBusDiagnostics.TagProcessingStatus, EventBusDiagnostics.StatusNoHandlers);
+                    activity?.SetStatus(ActivityStatusCode.Ok);
+                    return;
+                }
+
+                logger.HandlersFound(applicableHandlers.Count, eventType);
+                activity?.SetTag(EventBusDiagnostics.TagHandlerCount, applicableHandlers.Count);
+
+                // Pass the ProcessHandlers span context so each SafeHandleAsync child
+                // span is correctly nested under it, not orphaned.
+                var processHandlersContext = activity?.Context ?? default;
+
+                var handlerTasks = applicableHandlers.Select(handler =>
+                    SafeHandleAsync(handler, @event, processHandlersContext, cancellationToken));
+
+                await Task.WhenAll(handlerTasks).ConfigureAwait(false);
+
+                activity?.SetTag(EventBusDiagnostics.TagProcessingStatus, EventBusDiagnostics.StatusSuccess);
+                activity?.SetStatus(ActivityStatusCode.Ok);
             }
-
-            logger.HandlersFound(applicableHandlers.Count, eventType);
-
-            var handlerTasks = applicableHandlers.Select(handler =>
-                                                             SafeHandleAsync(handler, @event, cancellationToken));
-
-            await Task.WhenAll(handlerTasks).ConfigureAwait(false);
+            catch (Exception ex)
+            {
+                activity?.SetTag(EventBusDiagnostics.TagProcessingStatus, EventBusDiagnostics.StatusFailed);
+                activity?.SetTag(EventBusDiagnostics.TagErrorType, ex.GetType().Name);
+                activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                logger.ProcessEventFailed(ex, eventType);
+            }
         }, cancellationToken);
+
         return Task.CompletedTask;
     }
 
@@ -149,12 +180,9 @@ internal class InMemoryEventProcessor(
         activity?.SetTag(EventBusDiagnostics.TagEventType, eventType);
         activity?.SetTag(EventBusDiagnostics.TagResultType, resultType);
 
-        // Add event ID if available through reflection
-        var eventIdProperty = @event.GetType().GetProperty("Id");
-        if (eventIdProperty?.GetValue(@event) is Guid eventId)
-        {
-            activity?.SetTag(EventBusDiagnostics.TagEventId, eventId.ToString());
-        }
+        var eventId = TryGetEventId(@event);
+        if (eventId.HasValue)
+            activity?.SetTag(EventBusDiagnostics.TagEventId, eventId.Value.ToString());
 
         logger.InvokingEventInProcessor(eventType);
 
@@ -196,11 +224,12 @@ internal class InMemoryEventProcessor(
         }
     }
 
-    private async Task SafeHandleAsync(IEventHandler handler, IEvent @event, CancellationToken cancellationToken)
+    private async Task SafeHandleAsync(IEventHandler handler, IEvent @event, ActivityContext parentContext, CancellationToken cancellationToken)
     {
         using var activity = EventBusDiagnostics.ActivitySource.StartActivity(
-                                                                              EventBusDiagnostics.ActivityHandleEvent,
-                                                                              ActivityKind.Internal);
+            EventBusDiagnostics.ActivityHandleEvent,
+            ActivityKind.Internal,
+            parentContext);
 
         var handlerType = handler.GetType().Name;
         var eventType = @event.GetType().Name;
@@ -208,12 +237,9 @@ internal class InMemoryEventProcessor(
         activity?.SetTag(EventBusDiagnostics.TagHandlerType, handlerType);
         activity?.SetTag(EventBusDiagnostics.TagEventType, eventType);
 
-        // Add event ID if available through reflection
-        var eventIdProperty = @event.GetType().GetProperty("Id");
-        if (eventIdProperty?.GetValue(@event) is Guid eventId)
-        {
-            activity?.SetTag(EventBusDiagnostics.TagEventId, eventId.ToString());
-        }
+        var eventId = TryGetEventId(@event);
+        if (eventId.HasValue)
+            activity?.SetTag(EventBusDiagnostics.TagEventId, eventId.Value.ToString());
 
         try
         {
@@ -233,5 +259,15 @@ internal class InMemoryEventProcessor(
             logger.HandlerFailed(ex, handlerType, eventType);
             // Don't re-throw to allow other handlers to continue processing
         }
+    }
+
+    /// <summary>
+    /// Centralised, reflection-based helper that returns the event's <c>Id</c> property
+    /// value when it is a <see cref="Guid"/>, avoiding the repeated inline lookup.
+    /// </summary>
+    private static Guid? TryGetEventId(object @event)
+    {
+        var property = @event.GetType().GetProperty("Id");
+        return property?.GetValue(@event) is Guid id ? id : null;
     }
 }
