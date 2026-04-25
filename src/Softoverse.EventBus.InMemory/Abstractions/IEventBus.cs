@@ -38,6 +38,17 @@ public interface IEventBus
     /// <returns>A <see cref="ValueTask"/> that completes when the schedule request has been accepted.</returns>
     ValueTask ScheduleAsync<TEvent>(TEvent @event, DateTimeOffset scheduleTime, CancellationToken cancellationToken = default)
         where TEvent : class, IEvent;
+
+    /// <summary>
+    /// Schedules an event to be processed after a relative delay.
+    /// </summary>
+    /// <typeparam name="TEvent">Type of the event. Must implement <see cref="IEvent"/>.</typeparam>
+    /// <param name="event">The event to schedule.</param>
+    /// <param name="delay">The delay before the event should be processed.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A <see cref="ValueTask"/> that completes when the schedule request has been accepted.</returns>
+    ValueTask ScheduleAsync<TEvent>(TEvent @event, TimeSpan delay, CancellationToken cancellationToken = default)
+        where TEvent : class, IEvent;
     
     /// <summary>
     /// Schedules multiple events to be processed at a specific time.
@@ -48,6 +59,17 @@ public interface IEventBus
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A <see cref="ValueTask"/> that completes when the bulk schedule request has been accepted.</returns>
     ValueTask BulkScheduleAsync<TEvent>(IEnumerable<TEvent> events, DateTimeOffset scheduleTime, CancellationToken cancellationToken = default)
+        where TEvent : class, IEvent;
+
+    /// <summary>
+    /// Schedules multiple events to be processed after a relative delay.
+    /// </summary>
+    /// <typeparam name="TEvent">Type of the events. Must implement <see cref="IEvent"/>.</typeparam>
+    /// <param name="events">The events to schedule.</param>
+    /// <param name="delay">The delay before the events should be processed.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A <see cref="ValueTask"/> that completes when the bulk schedule request has been accepted.</returns>
+    ValueTask BulkScheduleAsync<TEvent>(IEnumerable<TEvent> events, TimeSpan delay, CancellationToken cancellationToken = default)
         where TEvent : class, IEvent;
 
     /// <summary>

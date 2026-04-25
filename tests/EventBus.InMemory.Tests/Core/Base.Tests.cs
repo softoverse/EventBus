@@ -97,12 +97,28 @@ public abstract class BaseTests(
     }
 
     [Fact]
+    public async Task ScheduleAsync_WithDelay_ShouldProcessAfterDelay()
+    {
+        // Arrange
+        var testEvent = new TestScheduledEvent(5);
+
+        // Act
+        await EventBus.ScheduleAsync(testEvent, TimeSpan.FromMilliseconds(DelayMilliseconds));
+
+        // Give some time for the scheduled event to be processed
+        await WaitForProcessingAsync(1);
+
+        // Assert
+        Assert.Contains(5, EventTracker.ScheduledEvents);
+    }
+
+    [Fact]
     public async Task BulkScheduleAsync_ShouldProcessAllEventsAtScheduledTime()
     {
         // Arrange
         var events = new[]
         {
-            new TestScheduledEvent(5), new TestScheduledEvent(6)
+            new TestScheduledEvent(6), new TestScheduledEvent(7)
         };
         var scheduleTime = DateTimeOffset.UtcNow.AddMilliseconds(DelayMilliseconds);
 
@@ -113,7 +129,27 @@ public abstract class BaseTests(
         await WaitForProcessingAsync(events.Length);
 
         // Assert - Check that events were scheduled
-        Assert.True(!EventTracker.ScheduledEvents.IsEmpty, $"Expected at least 1 scheduled event, but got {EventTracker.ScheduledEvents.Count}");
-        Assert.True(EventTracker.ScheduledEvents.Contains(5) || EventTracker.ScheduledEvents.Contains(6), "Expected to find event 5 or 6 in scheduled events");
+        Assert.False(EventTracker.ScheduledEvents.IsEmpty, "Expected scheduled events to contain at least one event");
+        Assert.True(EventTracker.ScheduledEvents.Contains(6) || EventTracker.ScheduledEvents.Contains(7), "Expected to find event 6 or 7 in scheduled events");;
+    }
+
+    [Fact]
+    public async Task BulkScheduleAsync_WithDelay_ShouldProcessAllEventsAfterDelay()
+    {
+        // Arrange
+        var events = new[]
+        {
+            new TestScheduledEvent(8), new TestScheduledEvent(9)
+        };
+
+        // Act
+        await EventBus.BulkScheduleAsync(events, TimeSpan.FromMilliseconds(DelayMilliseconds));
+
+        // Give some time for the scheduled events to be processed
+        await WaitForProcessingAsync(events.Length);
+
+        // Assert
+        Assert.Contains(8, EventTracker.ScheduledEvents);
+        Assert.Contains(9, EventTracker.ScheduledEvents);
     }
 }

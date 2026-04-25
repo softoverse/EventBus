@@ -134,6 +134,11 @@ internal class ChannelEventBus(
         }
     }
 
+    public ValueTask ScheduleAsync<TEvent>(TEvent @event, TimeSpan delay, CancellationToken cancellationToken = default) where TEvent : class, IEvent
+    {
+        return ScheduleAsync(@event, DateTimeOffset.UtcNow.Add(delay), cancellationToken);
+    }
+
     public async ValueTask BulkScheduleAsync<TEvent>(IEnumerable<TEvent> events, DateTimeOffset scheduleTime, CancellationToken cancellationToken = default) where TEvent : class, IEvent
     {
         using var activity = EventBusDiagnostics.ActivitySource.StartActivity(
@@ -171,6 +176,11 @@ internal class ChannelEventBus(
             logger.BulkScheduleEventsFailed(ex, eventType);
             throw;
         }
+    }
+
+    public ValueTask BulkScheduleAsync<TEvent>(IEnumerable<TEvent> events, TimeSpan delay, CancellationToken cancellationToken = default) where TEvent : class, IEvent
+    {
+        return BulkScheduleAsync(events, DateTimeOffset.UtcNow.Add(delay), cancellationToken);
     }
 
     public async ValueTask<TResult> InvokeAsync<TResult>(object @event, CancellationToken cancellationToken = default)
