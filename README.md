@@ -24,7 +24,7 @@ A lightweight, high-performance in-memory event bus for .NET 10+ applications. E
 
 - ⚡ **High Performance**: Built on `System.Threading.Channels` for optimal throughput
 - 🔄 **Async First**: Non-blocking event publishing and processing
-- 📅 **Event Scheduling**: Schedule events to be processed at specific times
+- 📅 **Event Scheduling**: Schedule events to be processed at specific times or after relative delays
 - 🛡️ **Type-Safe**: Strongly-typed contracts with compile-time safety
 - 🔧 **Flexible**: Extensible architecture with custom processors
 - 🧵 **Concurrency Control**: Built-in capacity management
@@ -181,6 +181,8 @@ await _eventBus.BulkPublishAsync(events);
 
 ### Scheduling Events
 
+Events can be scheduled with an absolute `DateTimeOffset` or with a relative `TimeSpan` delay.
+
 #### Schedule Single Event
 
 ```csharp
@@ -188,6 +190,13 @@ var reminderDate = DateTimeOffset.UtcNow.AddDays(7);
 await _eventBus.ScheduleAsync(
     new SubscriptionReminderEvent { SubscriptionId = "sub-123" },
     reminderDate
+);
+```
+
+```csharp
+await _eventBus.ScheduleAsync(
+    new SubscriptionReminderEvent { SubscriptionId = "sub-123" },
+    TimeSpan.FromDays(7)
 );
 ```
 
@@ -204,9 +213,15 @@ var scheduleTime = DateTimeOffset.UtcNow.AddDays(7);
 await _eventBus.BulkScheduleAsync(reminders, scheduleTime);
 ```
 
+```csharp
+await _eventBus.BulkScheduleAsync(reminders, TimeSpan.FromDays(7));
+```
+
 ### Scheduled Event Status Tracking
 
 The EventBus includes comprehensive status tracking for scheduled events to prevent duplicate execution and provide visibility into event processing:
+
+> **Note**: The built-in `ScheduledEventStore` is in-memory. Scheduled events and their statuses are kept only while the application process is running. If the application stops, restarts, or crashes, pending scheduled events in this store are lost.
 
 #### Status Types
 
@@ -635,6 +650,12 @@ var reminderDate = subscription.ExpiryDate.AddDays(-7);
 await _eventBus.ScheduleAsync(
     new SubscriptionExpiryReminderEvent { SubscriptionId = subscription.Id },
     reminderDate
+);
+
+// Or schedule relative to now
+await _eventBus.ScheduleAsync(
+    new SubscriptionExpiryReminderEvent { SubscriptionId = subscription.Id },
+    TimeSpan.FromDays(7)
 );
 ```
 

@@ -89,14 +89,26 @@ public abstract class EventBase : IEvent
 
 ### 2. IEventBus
 
-**Purpose**: Main entry point for publishing events.
+**Purpose**: Main entry point for publishing and scheduling events.
 
 **Design Decisions**:
 - `ValueTask` return type for better performance (avoids allocation in synchronous paths)
 - Separate methods for single/bulk publishing (optimization opportunity)
+- Scheduling accepts absolute `DateTimeOffset` values and relative `TimeSpan` delays
 - `InvokeAsync<TResult>` for request-response pattern (separate from fire-and-forget)
 
 **Implementation**: The library uses `ChannelEventBus` which leverages `System.Threading.Channels` for high-throughput async processing.
+
+**Scheduling API Surface**:
+```csharp
+ValueTask ScheduleAsync<TEvent>(TEvent @event, DateTimeOffset scheduleTime, CancellationToken cancellationToken = default);
+ValueTask ScheduleAsync<TEvent>(TEvent @event, TimeSpan delay, CancellationToken cancellationToken = default);
+
+ValueTask BulkScheduleAsync<TEvent>(IEnumerable<TEvent> events, DateTimeOffset scheduleTime, CancellationToken cancellationToken = default);
+ValueTask BulkScheduleAsync<TEvent>(IEnumerable<TEvent> events, TimeSpan delay, CancellationToken cancellationToken = default);
+```
+
+`TimeSpan` overloads are converted to `DateTimeOffset.UtcNow.Add(delay)` before the event is written to the scheduling channel.
 
 **Flow**:
 ```
@@ -526,6 +538,8 @@ The EventBus uses a channel-based concurrency model with multiple levels of conc
 1. **Event Storage**: 
    - Events stored in `ScheduledEventStore` (thread-safe `ConcurrentDictionary`)
    - Each event has unique ID, scheduled time (UTC), and added timestamp
+   - Relative `TimeSpan` delays are translated to absolute UTC scheduled times when queued
+   - The store is process-local memory; entries are kept only until the application stops or restarts
 
 2. **Background Processing**:
    - `ScheduledEventProcessingHostedService` polls store periodically
@@ -544,23 +558,30 @@ The EventBus uses a channel-based concurrency model with multiple levels of conc
 
 **Example Flow**:
 ```
-1. ScheduleAsync(event, scheduledTime) 
+1. ScheduleAsync(event, scheduledTime) or ScheduleAsync(event, delay)
    ↓
-2. InMemoryEventProcessor.ProcessScheduledEventAsync()
+2. ChannelEventBus writes event + UTC scheduled time to scheduling channel
    ↓
-3. ScheduledEventStore.AddScheduledEvent(event, time)
+3. InMemoryEventProcessor.ProcessScheduledEventAsync()
    ↓
-4. Background service polls every N seconds
+4. ScheduledEventStore.AddScheduledEvent(event, time)
    ↓
-5. ScheduledEventStore.GetDueEvents() 
+5. Background service polls every N seconds
    ↓
-6. If due: Process handlers + Remove from store
+6. ScheduledEventStore.GetDueEvents() 
+   ↓
+7. If due: Process handlers + Remove from store
 ```
 
 **Thread Safety**:
 - `ConcurrentDictionary` ensures thread-safe storage
 - Multiple events can be added/removed concurrently
 - Polling and processing don't block event scheduling
+
+**Persistence Boundary**:
+- `ScheduledEventStore` does not persist scheduled events to disk or external storage.
+- Pending scheduled events and status records are lost when the application process stops, restarts, or crashes.
+- Use an external scheduler or custom persistent store when scheduled events must survive application restarts.
 
 ## Dependency Injection
 
